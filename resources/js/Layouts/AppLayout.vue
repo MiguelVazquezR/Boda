@@ -51,6 +51,22 @@ const logout = () => {
                                 <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
                                 </NavLink>
+
+                                <!-- Admin Links (solo admin) -->
+                                <template v-if="$page.props.auth.user?.is_admin">
+                                    <NavLink :href="route('admin.guests.index')" :active="route().current('admin.guests.*')">
+                                        Invitados
+                                    </NavLink>
+                                    <NavLink :href="route('admin.faqs.index')" :active="route().current('admin.faqs.*')">
+                                        Preguntas Frecuentes
+                                    </NavLink>
+                                    <NavLink :href="route('admin.gallery.index')" :active="route().current('admin.gallery.*')">
+                                        Galería
+                                    </NavLink>
+                                    <NavLink :href="route('admin.settings.edit')" :active="route().current('admin.settings.*')">
+                                        Configuración
+                                    </NavLink>
+                                </template>
                             </div>
                         </div>
 
@@ -194,6 +210,22 @@ const logout = () => {
                         <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
                             Dashboard
                         </ResponsiveNavLink>
+
+                        <!-- Admin Links (solo admin, responsive) -->
+                        <template v-if="$page.props.auth.user?.is_admin">
+                            <ResponsiveNavLink :href="route('admin.guests.index')" :active="route().current('admin.guests.*')">
+                                Invitados
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.faqs.index')" :active="route().current('admin.faqs.*')">
+                                Preguntas Frecuentes
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.gallery.index')" :active="route().current('admin.gallery.*')">
+                                Galería
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.settings.edit')" :active="route().current('admin.settings.*')">
+                                Configuración
+                            </ResponsiveNavLink>
+                        </template>
                     </div>
 
                     <!-- Responsive Settings Options -->
