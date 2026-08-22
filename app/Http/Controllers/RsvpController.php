@@ -21,7 +21,7 @@ class RsvpController extends Controller
 
         $guests = Guest::search($request->query('q'))
             ->limit(10)
-            ->get(['id', 'full_name', 'allowed_passes', 'rsvp_status']);
+            ->get(['id', 'full_name', 'rsvp_status']);
 
         return response()->json($guests);
     }
@@ -35,13 +35,10 @@ class RsvpController extends Controller
 
         if ($validated['attending']) {
             $guest->confirmAttendance(
-                passes: (int) $validated['confirmed_passes'],
-                confirmedByName: $validated['confirmed_by_name'] ?? null,
                 message: $validated['rsvp_message'] ?? null,
             );
         } else {
             $guest->declineAttendance(
-                confirmedByName: $validated['confirmed_by_name'] ?? null,
                 message: $validated['rsvp_message'] ?? null,
             );
         }

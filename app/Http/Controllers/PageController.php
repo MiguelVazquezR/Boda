@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Faq;
 use App\Models\GalleryPhoto;
+use App\Models\ScheduleItem;
 use App\Models\WeddingSetting;
 use Inertia\Inertia;
 
@@ -19,6 +20,7 @@ class PageController extends Controller
             'settings' => WeddingSetting::current(),
             'faqs' => Faq::published()->get(),
             'galleryPhotos' => GalleryPhoto::approved()->latest()->get(),
+            'scheduleItems' => ScheduleItem::active()->ordered()->get(),
         ]);
     }
 }

@@ -45,6 +45,7 @@ export default {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
                 script: ['"Great Vibes"', 'cursive'],
                 slab: ['Arvo', 'serif'],
+                display: ['"Playfair Display"', 'serif'],
             },
             animation: {
                 'fade-in': 'fadeIn 0.8s ease-out',

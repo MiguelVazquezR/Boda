@@ -3,17 +3,24 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class Guest extends Model
 {
     protected $fillable = [
+        'first_name',
+        'last_name',
         'full_name',
         'search_slug',
-        'allowed_passes',
+        'age',
+        'gender',
+        'guest_group_id',
+        'phone',
+        'origin',
+        'state',
+        'city',
         'rsvp_status',
-        'confirmed_passes',
-        'confirmed_by_name',
         'rsvp_message',
         'rsvp_responded_at',
         'table_group',
@@ -22,8 +29,8 @@ class Guest extends Model
     protected function casts(): array
     {
         return [
-            'allowed_passes' => 'integer',
-            'confirmed_passes' => 'integer',
+            'age' => 'integer',
+            'guest_group_id' => 'integer',
             'rsvp_responded_at' => 'datetime',
         ];
     }
@@ -31,10 +38,26 @@ class Guest extends Model
     protected static function booted(): void
     {
         static::saving(function (Guest $guest) {
+            // Mantener full_name sincronizado con first_name + last_name
+            if ($guest->isDirty('first_name') || $guest->isDirty('last_name')) {
+                $guest->full_name = trim(implode(' ', array_filter([
+                    $guest->first_name,
+                    $guest->last_name,
+                ], fn ($value) => $value !== null && $value !== '')));
+            }
+
             if ($guest->isDirty('full_name')) {
                 $guest->search_slug = static::normalizeForSearch($guest->full_name);
             }
         });
+    }
+
+    /**
+     * Grupo al que pertenece el invitado (amigos del novio, familiares, etc.).
+     */
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(GuestGroup::class, 'guest_group_id');
     }
 
     /**
@@ -86,11 +109,9 @@ class Guest extends Model
     /**
      * Registra la confirmación de asistencia del invitado.
      */
-    public function confirmAttendance(int $passes, ?string $confirmedByName, ?string $message): void
+    public function confirmAttendance(?string $message): void
     {
         $this->rsvp_status = 'confirmed';
-        $this->confirmed_passes = $passes;
-        $this->confirmed_by_name = $confirmedByName;
         $this->rsvp_message = $message;
         $this->rsvp_responded_at = now();
         $this->save();
@@ -99,11 +120,9 @@ class Guest extends Model
     /**
      * Registra el rechazo de asistencia.
      */
-    public function declineAttendance(?string $confirmedByName, ?string $message): void
+    public function declineAttendance(?string $message): void
     {
         $this->rsvp_status = 'declined';
-        $this->confirmed_passes = 0;
-        $this->confirmed_by_name = $confirmedByName;
         $this->rsvp_message = $message;
         $this->rsvp_responded_at = now();
         $this->save();

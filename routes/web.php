@@ -4,6 +4,8 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FaqController as AdminFaqController;
 use App\Http\Controllers\Admin\GalleryController as AdminGalleryController;
 use App\Http\Controllers\Admin\GuestController as AdminGuestController;
+use App\Http\Controllers\Admin\GuestGroupController;
+use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\GalleryController;
 use App\Http\Controllers\PageController;
@@ -47,10 +49,17 @@ Route::middleware([
 
         // Invitados
         Route::get('/invitados', [AdminGuestController::class, 'index'])->name('guests.index');
+        Route::get('/invitados/nuevo', [AdminGuestController::class, 'create'])->name('guests.create');
+        Route::get('/invitados/{guest}/editar', [AdminGuestController::class, 'edit'])->name('guests.edit');
         Route::post('/invitados', [AdminGuestController::class, 'store'])->name('guests.store');
         Route::post('/invitados/importar', [AdminGuestController::class, 'import'])->name('guests.import');
         Route::put('/invitados/{guest}', [AdminGuestController::class, 'update'])->name('guests.update');
         Route::delete('/invitados/{guest}', [AdminGuestController::class, 'destroy'])->name('guests.destroy');
+
+        // Grupos de invitados
+        Route::post('/grupos', [GuestGroupController::class, 'store'])->name('groups.store');
+        Route::put('/grupos/{group}', [GuestGroupController::class, 'update'])->name('groups.update');
+        Route::delete('/grupos/{group}', [GuestGroupController::class, 'destroy'])->name('groups.destroy');
 
         // FAQs
         Route::get('/faqs', [AdminFaqController::class, 'index'])->name('faqs.index');
@@ -65,6 +74,13 @@ Route::middleware([
         Route::patch('/galeria/{photo}/aprobar', [AdminGalleryController::class, 'approve'])->name('gallery.approve');
         Route::patch('/galeria/{photo}/rechazar', [AdminGalleryController::class, 'reject'])->name('gallery.reject');
         Route::delete('/galeria/{photo}', [AdminGalleryController::class, 'destroy'])->name('gallery.destroy');
+
+        // Itinerario / Tiempos
+        Route::get('/tempos', [ScheduleController::class, 'index'])->name('schedule.index');
+        Route::post('/tempos', [ScheduleController::class, 'store'])->name('schedule.store');
+        Route::post('/tempos/{item}/mover', [ScheduleController::class, 'move'])->name('schedule.move');
+        Route::put('/tempos/{item}', [ScheduleController::class, 'update'])->name('schedule.update');
+        Route::delete('/tempos/{item}', [ScheduleController::class, 'destroy'])->name('schedule.destroy');
     });
 
 });

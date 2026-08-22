@@ -36,7 +36,7 @@ const logout = () => {
         <div class="min-h-screen bg-gray-100">
             <nav class="bg-white border-b border-gray-100">
                 <!-- Primary Navigation Menu -->
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="max-w-screen-2xl mx-auto px-3 sm:px-4 lg:px-6">
                     <div class="flex justify-between h-16">
                         <div class="flex">
                             <!-- Logo -->
@@ -62,6 +62,9 @@ const logout = () => {
                                     </NavLink>
                                     <NavLink :href="route('admin.gallery.index')" :active="route().current('admin.gallery.*')">
                                         Galería
+                                    </NavLink>
+                                    <NavLink :href="route('admin.schedule.index')" :active="route().current('admin.schedule.*')">
+                                        Tiempos
                                     </NavLink>
                                     <NavLink :href="route('admin.settings.edit')" :active="route().current('admin.settings.*')">
                                         Configuración
@@ -222,6 +225,9 @@ const logout = () => {
                             <ResponsiveNavLink :href="route('admin.gallery.index')" :active="route().current('admin.gallery.*')">
                                 Galería
                             </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.schedule.index')" :active="route().current('admin.schedule.*')">
+                                Tiempos
+                            </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('admin.settings.edit')" :active="route().current('admin.settings.*')">
                                 Configuración
                             </ResponsiveNavLink>
@@ -307,7 +313,7 @@ const logout = () => {
 
             <!-- Page Heading -->
             <header v-if="$slots.header" class="bg-white shadow">
-                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                <div class="max-w-screen-2xl mx-auto py-6 px-3 sm:px-4 lg:px-6">
                     <slot name="header" />
                 </div>
             </header>

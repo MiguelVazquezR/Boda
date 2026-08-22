@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
 import axios from 'axios';
-import { Squares2X2Icon, Square3Stack3DIcon } from '@heroicons/vue/24/outline';
+import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon } from '@heroicons/vue/24/outline';
 import DressCodeGrid from '@/Components/DressCode/DressCodeGrid.vue';
 import DressCodeCarousel from '@/Components/DressCode/DressCodeCarousel.vue';
 
@@ -11,7 +11,21 @@ const props = defineProps({
     settings: Object,
     faqs: Array,
     galleryPhotos: Array,
+    scheduleItems: Array,
 });
+
+// ── Ilustración predeterminada del itinerario según el título ──
+function scheduleIcon(title) {
+    const t = (title || '').toLowerCase();
+    if (/bienven|welcome|llegad|cóctel|cocktail|bebida/.test(t)) return SparklesIcon;
+    if (/ceremon|ceremonia|anillo/.test(t)) return HeartIcon;
+    if (/brindis|champagne|champaña|toast|champán/.test(t)) return StarIcon;
+    if (/cena|comida|picoteo|dinner|food/.test(t)) return CakeIcon;
+    if (/detall|regal|gift|sorpresa/.test(t)) return GiftIcon;
+    if (/karaoke|cantar|micrófono|microfono/.test(t)) return MicrophoneIcon;
+    if (/fiesta|música|musica|baile|party/.test(t)) return MusicalNoteIcon;
+    return SparklesIcon;
+}
 
 // ── Navbar scroll state ──────────────────────────────────────────
 const isScrolled = ref(false);
@@ -163,8 +177,6 @@ function selectGuest(guest) {
 
     // Resetear formulario
     attending.value = null;
-    confirmedPasses.value = 1;
-    confirmedByName.value = '';
     rsvpMessage.value = '';
 }
 
@@ -176,14 +188,10 @@ function resetRsvp() {
 
 // ── RSVP Form ────────────────────────────────────────────────────
 const attending = ref(null);
-const confirmedPasses = ref(1);
-const confirmedByName = ref('');
 const rsvpMessage = ref('');
 
 const rsvpForm = useForm({
     attending: null,
-    confirmed_passes: 1,
-    confirmed_by_name: '',
     rsvp_message: '',
 });
 
@@ -191,8 +199,6 @@ function submitRsvp() {
     if (!selectedGuest.value || attending.value === null) return;
 
     rsvpForm.attending = attending.value;
-    rsvpForm.confirmed_passes = attending.value ? confirmedPasses.value : 0;
-    rsvpForm.confirmed_by_name = confirmedByName.value;
     rsvpForm.rsvp_message = rsvpMessage.value;
 
     rsvpForm.post(route('rsvp.confirm', selectedGuest.value.id), {
@@ -289,6 +295,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                 <div class="hidden md:flex items-center gap-1 text-sm font-medium">
                     <button @click="scrollTo('historia')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Historia</button>
                     <button @click="scrollTo('evento')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Evento</button>
+                    <button @click="scrollTo('tiempos')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Tiempos</button>
                     <button @click="scrollTo('dresscode')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Dress Code</button>
                     <button @click="scrollTo('rsvp')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">RSVP</button>
                     <button @click="scrollTo('faq')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">FAQ</button>
@@ -309,6 +316,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                 <div class="flex flex-col gap-1 pt-2">
                     <button @click="scrollTo('historia')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Nuestra Historia</button>
                     <button @click="scrollTo('evento')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">El Evento</button>
+                    <button @click="scrollTo('tiempos')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Tiempos</button>
                     <button @click="scrollTo('dresscode')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Dress Code</button>
                     <button @click="scrollTo('rsvp')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Confirmar Asistencia</button>
                     <button @click="scrollTo('faq')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Preguntas Frecuentes</button>
@@ -399,7 +407,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                     <div class="order-1 md:order-2 animate-slide-up">
                         <div class="relative">
                             <div class="w-full h-72 md:h-96 rounded-2xl bg-gradient-to-br from-olivo/20 to-cuero/10 border border-cuero/10 overflow-hidden shadow-lg">
-                                <img v-if="settings?.how_we_met_photo_path" :src="'/storage/' + settings.how_we_met_photo_path" alt="Cómo nos conocimos" class="w-full h-full object-cover" />
+                                <img v-if="settings?.how_we_met_photo_path" :src="'/storage/' + settings.how_we_met_photo_path" alt="Cómo nos conocimos" class="w-full h-full object-contain" />
                                 <div v-else class="flex items-center justify-center h-full text-cuero/30 font-script text-6xl">Foto 1</div>
                             </div>
                             <div class="absolute -bottom-3 -right-3 w-full h-full rounded-2xl border-2 border-dorado/40 -z-10"></div>
@@ -412,7 +420,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                     <div class="animate-slide-up">
                         <div class="relative">
                             <div class="w-full h-72 md:h-96 rounded-2xl bg-gradient-to-bl from-olivo/20 to-cuero/10 border border-cuero/10 overflow-hidden shadow-lg">
-                                <img v-if="settings?.proposal_photo_path" :src="'/storage/' + settings.proposal_photo_path" alt="La propuesta" class="w-full h-full object-cover" />
+                                <img v-if="settings?.proposal_photo_path" :src="'/storage/' + settings.proposal_photo_path" alt="La propuesta" class="w-full h-full object-contain" />
                                 <div v-else class="flex items-center justify-center h-full text-cuero/30 font-script text-6xl">Foto 2</div>
                             </div>
                             <div class="absolute -bottom-3 -left-3 w-full h-full rounded-2xl border-2 border-dorado/40 -z-10"></div>
@@ -452,8 +460,8 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         <p class="text-cuero/60 text-sm mb-4" v-if="settings?.ceremony_datetime">{{ ceremonyTimeFormatted }} hrs</p>
                         <p class="text-cuero/70 mb-1">{{ settings?.ceremony_address || 'Por definir' }}</p>
                         <!-- Ceremony photo -->
-                        <div v-if="settings?.ceremony_photo_path" class="mb-4 rounded-xl overflow-hidden">
-                            <img :src="'/storage/' + settings.ceremony_photo_path" alt="Ceremonia" class="w-full h-40 object-cover rounded-xl" />
+                        <div v-if="settings?.ceremony_photo_path" class="mb-4 rounded-xl overflow-hidden bg-arena">
+                            <img :src="'/storage/' + settings.ceremony_photo_path" alt="Ceremonia" class="w-full h-40 object-contain rounded-xl" />
                         </div>
                         <div class="flex flex-wrap gap-3" v-if="settings?.ceremony_address">
                             <a :href="ceremonyMapsUrl" target="_blank" rel="noopener"
@@ -481,8 +489,8 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         <p class="text-cuero/60 text-sm mb-4" v-if="settings?.celebration_datetime">{{ celebrationTimeFormatted }} hrs</p>
                         <p class="text-cuero/70 mb-1">{{ settings?.celebration_address || 'Por definir' }}</p>
                         <!-- Celebration photo -->
-                        <div v-if="settings?.celebration_photo_path" class="mb-4 rounded-xl overflow-hidden">
-                            <img :src="'/storage/' + settings.celebration_photo_path" alt="Celebración" class="w-full h-40 object-cover rounded-xl" />
+                        <div v-if="settings?.celebration_photo_path" class="mb-4 rounded-xl overflow-hidden bg-arena">
+                            <img :src="'/storage/' + settings.celebration_photo_path" alt="Celebración" class="w-full h-40 object-contain rounded-xl" />
                         </div>
                         <div class="flex flex-wrap gap-3" v-if="settings?.celebration_address">
                             <a :href="celebrationMapsUrl" target="_blank" rel="noopener"
@@ -498,6 +506,64 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         </div>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <!-- ════════════════ TIEMPOS (ITINERARIO) ════════════════ -->
+        <section id="tiempos" class="py-16 md:py-24 px-4 bg-arena">
+            <div class="max-w-5xl mx-auto">
+                <!-- Section header -->
+                <div class="text-center mb-10">
+                    <div class="flex items-center justify-center gap-4 mb-4">
+                        <div class="h-px w-10 bg-dorado"></div>
+                        <span class="text-olivo text-xs tracking-[0.3em] uppercase font-medium">Tiempos</span>
+                        <div class="h-px w-10 bg-dorado"></div>
+                    </div>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-cuero">El Itinerario</h2>
+                    <p class="text-cuero/60 mt-3 max-w-xl mx-auto">Nuestra noche paso a paso, para que no te pierdas de nada.</p>
+                </div>
+
+                <!-- Timeline: imagen a la izquierda, hora + descripción a la derecha -->
+                <div v-if="scheduleItems && scheduleItems.length" class="relative">
+                    <!-- Línea central (desktop) y línea izquierda (móvil) -->
+                    <div class="hidden md:block absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 bg-cuero/15"></div>
+                    <div class="md:hidden absolute left-2 top-0 bottom-0 w-px bg-cuero/15"></div>
+
+                    <div class="space-y-6 md:space-y-0">
+                        <div
+                            v-for="item in scheduleItems"
+                            :key="item.id"
+                            class="relative md:grid md:grid-cols-2 md:gap-10 md:items-center md:py-3"
+                        >
+                            <!-- Marcador de la línea -->
+                            <div class="absolute left-2 md:left-1/2 top-6 md:top-1/2 -translate-x-1/2 md:-translate-y-1/2 w-3.5 h-3.5 rounded-full bg-dorado border-2 border-white shadow"></div>
+
+                            <!-- Imagen (izquierda): cuadrada, siempre se ve completa sin cortarse -->
+                            <div class="pl-10 md:pl-0 md:pr-6 mb-3 md:mb-0 flex md:justify-end">
+                                <div class="flex-shrink-0 w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-xl overflow-hidden shadow border border-cuero/10 bg-gradient-to-br from-dorado/25 via-arena to-olivo/20 flex items-center justify-center">
+                                    <img
+                                        v-if="item.image_path"
+                                        :src="'/storage/' + item.image_path"
+                                        :alt="item.title"
+                                        class="w-full h-full object-contain"
+                                    />
+                                    <component v-else :is="scheduleIcon(item.title)" class="w-12 h-12 text-dorado/70" />
+                                </div>
+                            </div>
+
+                            <!-- Texto (derecha): hora + qué se hará -->
+                            <div class="pl-10 md:pl-12">
+                                <span class="font-display font-bold text-xl md:text-2xl text-dorado">{{ item.time || '—' }}</span>
+                                <h3 class="font-display text-lg md:text-xl text-cuero mt-0.5 mb-1">{{ item.title }}</h3>
+                                <p v-if="item.description" class="text-cuero/70 text-sm leading-relaxed">{{ item.description }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <p v-else class="text-center text-cuero/50 italic py-10">
+                    Muy pronto compartiremos el itinerario de la celebración.
+                </p>
             </div>
         </section>
 
@@ -522,11 +588,13 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
 
                     <!-- Imagen de referencia general -->
                     <div v-if="settings?.dress_code_image_url" class="mb-10">
-                        <img
-                            :src="settings.dress_code_image_url"
-                            alt="Referencia de vestimenta"
-                            class="w-full max-w-2xl mx-auto rounded-2xl object-cover max-h-96 shadow-lg"
-                        />
+                        <div class="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden bg-arena">
+                            <img
+                                :src="settings.dress_code_image_url"
+                                alt="Referencia de vestimenta"
+                                class="w-full max-h-96 object-contain rounded-2xl shadow-lg"
+                            />
+                        </div>
                     </div>
 
                     <!-- Toggle de vista -->
@@ -631,7 +699,6 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                             >
                                 <div>
                                     <p class="font-medium text-cuero group-hover:text-cuero">{{ guest.full_name }}</p>
-                                    <p class="text-xs text-cuero/50">{{ guest.allowed_passes }} pase(s)</p>
                                 </div>
                                 <span
                                     v-if="guest.rsvp_status === 'confirmed'"
@@ -663,8 +730,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                             Buscar otro invitado
                         </button>
 
-                        <p class="font-slab text-xl text-cuero mb-1">¡Hola, {{ selectedGuest.full_name }}!</p>
-                        <p class="text-cuero/60 mb-8">Tienes <strong class="text-cuero">{{ selectedGuest.allowed_passes }}</strong> pase(s) asignado(s).</p>
+                        <p class="font-slab text-xl text-cuero mb-8">¡Hola, {{ selectedGuest.full_name }}!</p>
 
                         <!-- Attending toggle -->
                         <label class="block font-medium text-cuero mb-3">¿Asistirás?</label>
@@ -689,22 +755,6 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                                 <span class="text-2xl block mb-1">😔</span>
                                 No podré asistir
                             </button>
-                        </div>
-
-                        <!-- Confirmed passes -->
-                        <div v-if="attending" class="mb-5">
-                            <label class="block font-medium text-cuero mb-2">¿Cuántos pases usarás?</label>
-                            <select v-model.number="confirmedPasses"
-                                class="w-full px-4 py-3 rounded-2xl border-2 border-cuero/20 bg-white text-cuero focus:border-dorado focus:ring-2 focus:ring-dorado/20 outline-none transition-all">
-                                <option v-for="n in selectedGuest.allowed_passes" :key="n" :value="n">{{ n }} pase(s)</option>
-                            </select>
-                        </div>
-
-                        <!-- Name of person confirming -->
-                        <div class="mb-5">
-                            <label class="block font-medium text-cuero mb-2">¿Quién confirma?</label>
-                            <input v-model="confirmedByName" type="text" placeholder="Tu nombre"
-                                class="w-full px-4 py-3 rounded-2xl border-2 border-cuero/20 bg-white text-cuero placeholder-cuero/30 focus:border-dorado focus:ring-2 focus:ring-dorado/20 outline-none transition-all" />
                         </div>
 
                         <!-- Message -->
@@ -778,7 +828,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                     <div v-for="(faq, i) in [
                         { q: '¿Hay estacionamiento o valet parking?', a: 'Sí, el lugar cuenta con estacionamiento privado gratuito y servicio de valet parking durante todo el evento.' },
                         { q: '¿Se permiten niños?', a: 'Amamos a sus pequeños, pero hemos decidido celebrar nuestra boda en una atmósfera exclusiva para adultos. ¡Esperamos que comprendan y puedan disfrutar de la noche libres de preocupaciones!' },
-                        { q: '¿Puedo llevar a alguien más?', a: 'Los pases asignados en tu confirmación de asistencia están calculados de manera estricta conforme al cupo del lugar. No es posible añadir pases adicionales.' },
+                        { q: '¿Puedo llevar a alguien más?', a: 'Para temas de cupo del lugar, te pedimos confirmar solo a las personas incluidas en la invitación. Si necesitas ayuda, contáctanos directamente.' },
                         { q: '¿Cuál es la fecha límite para confirmar?', a: 'Agradecemos tu confirmación antes de la fecha límite indicada para asegurar tu lugar en el banquete.' },
                         { q: '¿Qué pasa si confirmo y luego no puedo asistir?', a: 'Te pedimos que nos avises con la mayor anticipación posible a través de la misma página o contactando directamente a los novios para poder reajustar los espacios.' },
                     ]" :key="i"
@@ -866,9 +916,9 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                     <div
                         v-for="photo in galleryPhotos" :key="photo.id"
                         @click="openLightbox('/storage/' + photo.image_path)"
-                        class="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+                        class="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-arena"
                     >
-                        <img :src="'/storage/' + photo.image_path" alt="Foto de boda" class="w-full h-full object-cover" />
+                        <img :src="'/storage/' + photo.image_path" alt="Foto de boda" class="w-full h-full object-contain" />
                         <div class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/20 transition-all duration-300 flex items-end p-3">
                             <span v-if="photo.uploader_name" class="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300">Por: {{ photo.uploader_name }}</span>
                         </div>

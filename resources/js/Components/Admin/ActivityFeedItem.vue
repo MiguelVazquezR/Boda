@@ -30,7 +30,6 @@ const { text: relativeTimeText } = useRelativeTime(respondedAt);
                 <span class="font-semibold">{{ guest.full_name }}</span>
                 <template v-if="isConfirmed">
                     confirmó su asistencia
-                    <span v-if="guest.confirmed_passes > 0">con {{ guest.confirmed_passes }} pase(s)</span>
                 </template>
                 <template v-else>
                     no podrá asistir

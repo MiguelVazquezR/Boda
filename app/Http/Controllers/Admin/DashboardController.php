@@ -22,7 +22,7 @@ class DashboardController extends Controller
             'recentActivity' => Guest::whereNotNull('rsvp_responded_at')
                 ->orderByDesc('rsvp_responded_at')
                 ->limit(10)
-                ->get(['id', 'full_name', 'rsvp_status', 'confirmed_passes', 'rsvp_message', 'rsvp_responded_at']),
+                ->get(['id', 'full_name', 'rsvp_status', 'rsvp_message', 'rsvp_responded_at']),
             'adminSettings' => WeddingSetting::current()->only(['event_datetime', 'rsvp_deadline']),
             'pendingPhotosCount' => GalleryPhoto::pending()->count(),
         ]);
