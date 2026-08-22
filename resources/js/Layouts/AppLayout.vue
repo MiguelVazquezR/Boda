@@ -36,7 +36,7 @@ const logout = () => {
         <div class="min-h-screen bg-gray-100">
             <nav class="bg-white border-b border-gray-100">
                 <!-- Primary Navigation Menu -->
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="max-w-screen-2xl mx-auto px-3 sm:px-4 lg:px-6">
                     <div class="flex justify-between h-16">
                         <div class="flex">
                             <!-- Logo -->
@@ -51,6 +51,25 @@ const logout = () => {
                                 <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
                                 </NavLink>
+
+                                <!-- Admin Links (solo admin) -->
+                                <template v-if="$page.props.auth.user?.is_admin">
+                                    <NavLink :href="route('admin.guests.index')" :active="route().current('admin.guests.*')">
+                                        Invitados
+                                    </NavLink>
+                                    <NavLink :href="route('admin.faqs.index')" :active="route().current('admin.faqs.*')">
+                                        Preguntas Frecuentes
+                                    </NavLink>
+                                    <NavLink :href="route('admin.gallery.index')" :active="route().current('admin.gallery.*')">
+                                        Galería
+                                    </NavLink>
+                                    <NavLink :href="route('admin.schedule.index')" :active="route().current('admin.schedule.*')">
+                                        Tiempos
+                                    </NavLink>
+                                    <NavLink :href="route('admin.settings.edit')" :active="route().current('admin.settings.*')">
+                                        Configuración
+                                    </NavLink>
+                                </template>
                             </div>
                         </div>
 
@@ -194,6 +213,25 @@ const logout = () => {
                         <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
                             Dashboard
                         </ResponsiveNavLink>
+
+                        <!-- Admin Links (solo admin, responsive) -->
+                        <template v-if="$page.props.auth.user?.is_admin">
+                            <ResponsiveNavLink :href="route('admin.guests.index')" :active="route().current('admin.guests.*')">
+                                Invitados
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.faqs.index')" :active="route().current('admin.faqs.*')">
+                                Preguntas Frecuentes
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.gallery.index')" :active="route().current('admin.gallery.*')">
+                                Galería
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.schedule.index')" :active="route().current('admin.schedule.*')">
+                                Tiempos
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.settings.edit')" :active="route().current('admin.settings.*')">
+                                Configuración
+                            </ResponsiveNavLink>
+                        </template>
                     </div>
 
                     <!-- Responsive Settings Options -->
@@ -275,7 +313,7 @@ const logout = () => {
 
             <!-- Page Heading -->
             <header v-if="$slots.header" class="bg-white shadow">
-                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                <div class="max-w-screen-2xl mx-auto py-6 px-3 sm:px-4 lg:px-6">
                     <slot name="header" />
                 </div>
             </header>

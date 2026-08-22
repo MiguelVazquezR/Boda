@@ -1,0 +1,573 @@
+<script setup>
+import { ref } from 'vue';
+import { useForm } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import FormSection from '@/Components/FormSection.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputError from '@/Components/InputError.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import ActionMessage from '@/Components/ActionMessage.vue';
+import { PhotoIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+
+const props = defineProps({ settings: Object });
+
+const photoUrl = (path) => path ? '/storage/' + path : null;
+
+/** Convierte fecha ISO a formato datetime-local: yyyy-MM-ddTHH:mm:ss */
+function toDatetimeLocal(iso) {
+    if (!iso) return '';
+    if (typeof iso === 'string' && iso.includes('T')) {
+        return iso.substring(0, 16); // Devolverá exactamente "2026-11-14T16:00"
+    }
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+const form = useForm({
+    _method: 'PUT',
+    // Nuestra Historia
+    how_we_met_story: props.settings?.how_we_met_story ?? '',
+    how_we_met_photo: null,
+    proposal_story: props.settings?.proposal_story ?? '',
+    proposal_photo: null,
+    // Cuándo y Dónde
+    event_datetime: toDatetimeLocal(props.settings?.event_datetime),
+    ceremony_title: props.settings?.ceremony_title ?? '',
+    ceremony_datetime: toDatetimeLocal(props.settings?.ceremony_datetime),
+    ceremony_address: props.settings?.ceremony_address ?? '',
+    ceremony_lat: props.settings?.ceremony_lat ?? '',
+    ceremony_lng: props.settings?.ceremony_lng ?? '',
+    ceremony_photo: null,
+    celebration_title: props.settings?.celebration_title ?? '',
+    celebration_datetime: toDatetimeLocal(props.settings?.celebration_datetime),
+    celebration_address: props.settings?.celebration_address ?? '',
+    celebration_lat: props.settings?.celebration_lat ?? '',
+    celebration_lng: props.settings?.celebration_lng ?? '',
+    celebration_photo: null,
+    // Portada y Dress Code general
+    cover_photo: null,
+    dress_code_image: null,
+    // Código de Vestimenta
+    dress_code_general: props.settings?.dress_code_general ?? '',
+    dress_code_women_dress: null,
+    dress_code_women_dress_desc: props.settings?.dress_code_women_dress_desc ?? '',
+    dress_code_women_shoes: null,
+    dress_code_women_shoes_desc: props.settings?.dress_code_women_shoes_desc ?? '',
+    dress_code_women_accessories: null,
+    dress_code_women_accessories_desc: props.settings?.dress_code_women_accessories_desc ?? '',
+    dress_code_women_other: null,
+    dress_code_women_other_desc: props.settings?.dress_code_women_other_desc ?? '',
+    dress_code_men_suit: null,
+    dress_code_men_suit_desc: props.settings?.dress_code_men_suit_desc ?? '',
+    dress_code_men_shoes: null,
+    dress_code_men_shoes_desc: props.settings?.dress_code_men_shoes_desc ?? '',
+    dress_code_men_accessories: null,
+    dress_code_men_accessories_desc: props.settings?.dress_code_men_accessories_desc ?? '',
+    dress_code_men_other: null,
+    dress_code_men_other_desc: props.settings?.dress_code_men_other_desc ?? '',
+    // General
+    rsvp_deadline: props.settings?.rsvp_deadline ?? '',
+});
+
+// Previews
+const coverPhotoPreview = ref(photoUrl(props.settings?.cover_photo_path));
+const dressCodeImagePreview = ref(photoUrl(props.settings?.dress_code_image_path));
+
+const howWeMetPreview = ref(photoUrl(props.settings?.how_we_met_photo_path));
+const proposalPreview = ref(photoUrl(props.settings?.proposal_photo_path));
+const ceremonyPreview = ref(photoUrl(props.settings?.ceremony_photo_path));
+const celebrationPreview = ref(photoUrl(props.settings?.celebration_photo_path));
+
+const womenDressPreview = ref(photoUrl(props.settings?.dress_code_women_dress));
+const womenShoesPreview = ref(photoUrl(props.settings?.dress_code_women_shoes));
+const womenAccessoriesPreview = ref(photoUrl(props.settings?.dress_code_women_accessories));
+const womenOtherPreview = ref(photoUrl(props.settings?.dress_code_women_other));
+
+const menSuitPreview = ref(photoUrl(props.settings?.dress_code_men_suit));
+const menShoesPreview = ref(photoUrl(props.settings?.dress_code_men_shoes));
+const menAccessoriesPreview = ref(photoUrl(props.settings?.dress_code_men_accessories));
+const menOtherPreview = ref(photoUrl(props.settings?.dress_code_men_other));
+
+function setPreview(e, refKey) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const previewMap = {
+        cover_photo: coverPhotoPreview,
+        dress_code_image: dressCodeImagePreview,
+        how_we_met_photo: howWeMetPreview,
+        proposal_photo: proposalPreview,
+        ceremony_photo: ceremonyPreview,
+        celebration_photo: celebrationPreview,
+        dress_code_women_dress: womenDressPreview,
+        dress_code_women_shoes: womenShoesPreview,
+        dress_code_women_accessories: womenAccessoriesPreview,
+        dress_code_women_other: womenOtherPreview,
+        dress_code_men_suit: menSuitPreview,
+        dress_code_men_shoes: menShoesPreview,
+        dress_code_men_accessories: menAccessoriesPreview,
+        dress_code_men_other: menOtherPreview,
+    };
+    form[refKey] = file;
+    if (previewMap[refKey]) previewMap[refKey].value = url;
+}
+
+// ── Eliminar imagen ──────────────────────────────────────────────
+const removeFlags = ref({});
+
+function removeImage(field) {
+    // Buscar el preview ref en el mapa existente
+    const previewRef = {
+        cover_photo: coverPhotoPreview,
+        dress_code_image: dressCodeImagePreview,
+        how_we_met_photo: howWeMetPreview,
+        proposal_photo: proposalPreview,
+        ceremony_photo: ceremonyPreview,
+        celebration_photo: celebrationPreview,
+        dress_code_women_dress: womenDressPreview,
+        dress_code_women_shoes: womenShoesPreview,
+        dress_code_women_accessories: womenAccessoriesPreview,
+        dress_code_women_other: womenOtherPreview,
+        dress_code_men_suit: menSuitPreview,
+        dress_code_men_shoes: menShoesPreview,
+        dress_code_men_accessories: menAccessoriesPreview,
+        dress_code_men_other: menOtherPreview,
+    }[field];
+    if (previewRef) previewRef.value = null;
+    removeFlags.value['_remove_' + field] = true;
+    form[field] = null;
+}
+
+function submit() {
+    form
+        .transform(data => ({ ...data, ...removeFlags.value }))
+        .post(route('admin.settings.update'), {
+            preserveScroll: true,
+            forceFormData: true,
+            onSuccess: () => {
+                removeFlags.value = {};
+                // Las previews se regeneran con los datos frescos del servidor
+            },
+        });
+}
+</script>
+
+<template>
+    <AppLayout title="Configuración del Sitio">
+        <template #header>
+            <h2 class="font-slab text-xl text-cuero leading-tight">Configuración del Sitio</h2>
+        </template>
+
+        <div class="py-6">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="max-w-4xl mx-auto">
+
+            <div class="space-y-8">
+
+                <!-- ═══════════ NUESTRA HISTORIA ═══════════ -->
+                <div class="bg-white rounded-2xl border border-cuero/10 shadow-sm overflow-hidden">
+                    <div class="px-6 py-5 border-b border-cuero/5">
+                        <h3 class="font-slab text-lg text-cuero">Nuestra Historia</h3>
+                        <p class="text-sm text-cuero/50 mt-1">Cuenta cómo se conocieron y el momento de la propuesta.</p>
+                    </div>
+
+                    <!-- Parte 1: Cómo nos conocimos -->
+                    <div class="p-6 border-b border-cuero/5">
+                        <h4 class="font-medium text-cuero/70 mb-4 flex items-center gap-2">
+                            <span class="w-7 h-7 bg-dorado/10 text-dorado rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                            Cómo nos conocimos
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <InputLabel value="Historia" class="mb-1" />
+                                <textarea v-model="form.how_we_met_story" rows="6"
+                                    class="w-full rounded-xl border-cuero/20 focus:border-dorado focus:ring-dorado/20 text-sm"
+                                    placeholder="Escribe cómo se conocieron..."></textarea>
+                                <InputError :message="form.errors.how_we_met_story" class="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel value="Foto" class="mb-2" />
+                                <div class="relative group rounded-2xl overflow-hidden bg-arena-dark/50 border border-cuero/10"
+                                    :class="(howWeMetPreview ?? photoUrl(props.settings?.how_we_met_photo_path)) ? 'h-48' : 'h-40'">
+                                    <img v-if="howWeMetPreview ?? photoUrl(props.settings?.how_we_met_photo_path)" :src="howWeMetPreview ?? photoUrl(props.settings?.how_we_met_photo_path)" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/30">
+                                        <div class="text-center"><PhotoIcon class="w-8 h-8 mx-auto mb-1" /><span class="text-xs">Sin foto</span></div>
+                                    </div>
+                                    <div class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/30 transition-all flex items-center justify-center">
+                                        <label class="cursor-pointer bg-white/90 hover:bg-white text-cuero px-4 py-2 rounded-xl text-sm font-medium opacity-0 group-hover:opacity-100 transition-all shadow-lg">
+                                            {{ (howWeMetPreview ?? photoUrl(props.settings?.how_we_met_photo_path)) ? 'Cambiar' : 'Subir foto' }}
+                                            <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'how_we_met_photo')" />
+                                        </label>
+                                    </div>
+                                </div>
+                                <InputError :message="form.errors.how_we_met_photo" class="mt-1" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Parte 2: La propuesta -->
+                    <div class="p-6">
+                        <h4 class="font-medium text-cuero/70 mb-4 flex items-center gap-2">
+                            <span class="w-7 h-7 bg-dorado/10 text-dorado rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                            La Propuesta
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <InputLabel value="Historia" class="mb-1" />
+                                <textarea v-model="form.proposal_story" rows="6"
+                                    class="w-full rounded-xl border-cuero/20 focus:border-dorado focus:ring-dorado/20 text-sm"
+                                    placeholder="Cuenta cómo fue la propuesta..."></textarea>
+                                <InputError :message="form.errors.proposal_story" class="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel value="Foto" class="mb-2" />
+                                <div class="relative group rounded-2xl overflow-hidden bg-arena-dark/50 border border-cuero/10"
+                                    :class="(proposalPreview ?? photoUrl(props.settings?.proposal_photo_path)) ? 'h-48' : 'h-40'">
+                                    <img v-if="proposalPreview ?? photoUrl(props.settings?.proposal_photo_path)" :src="proposalPreview ?? photoUrl(props.settings?.proposal_photo_path)" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/30">
+                                        <div class="text-center"><PhotoIcon class="w-8 h-8 mx-auto mb-1" /><span class="text-xs">Sin foto</span></div>
+                                    </div>
+                                    <div class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/30 transition-all flex items-center justify-center">
+                                        <label class="cursor-pointer bg-white/90 hover:bg-white text-cuero px-4 py-2 rounded-xl text-sm font-medium opacity-0 group-hover:opacity-100 transition-all shadow-lg">
+                                            {{ (proposalPreview ?? photoUrl(props.settings?.proposal_photo_path)) ? 'Cambiar' : 'Subir foto' }}
+                                            <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'proposal_photo')" />
+                                        </label>
+                                    </div>
+                                </div>
+                                <InputError :message="form.errors.proposal_photo" class="mt-1" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══════════ CUÁNDO Y DÓNDE ═══════════ -->
+                <div class="bg-white rounded-2xl border border-cuero/10 shadow-sm overflow-hidden">
+                    <div class="px-6 py-5 border-b border-cuero/5">
+                        <h3 class="font-slab text-lg text-cuero">Cuándo y Dónde</h3>
+                        <p class="text-sm text-cuero/50 mt-1">Información de la ceremonia y la celebración.</p>
+                    </div>
+
+                    <!-- Fecha general -->
+                    <div class="p-6 border-b border-cuero/5 bg-arena/30">
+                        <div class="max-w-md">
+                            <InputLabel value="Fecha y Hora del Evento" class="mb-1" />
+                            <input type="datetime-local" v-model="form.event_datetime"
+                                class="w-full rounded-xl border-cuero/20 focus:border-dorado focus:ring-dorado/20 text-cuero" />
+                            <InputError :message="form.errors.event_datetime" class="mt-1" />
+                        </div>
+                    </div>
+
+                    <!-- Ceremonia -->
+                    <div class="p-6 border-b border-cuero/5">
+                        <h4 class="font-medium text-cuero/70 mb-4 flex items-center gap-2">
+                            <span class="w-7 h-7 bg-olivo/10 text-olivo rounded-full flex items-center justify-center text-sm font-bold">💒</span>
+                            Ceremonia
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-4">
+                                <div>
+                                    <InputLabel value="Título / Nombre del lugar" class="mb-1" />
+                                    <TextInput v-model="form.ceremony_title" class="w-full" placeholder="Ej. Parroquia de San Juan" />
+                                </div>
+                                <div>
+                                    <InputLabel value="Fecha y Hora" class="mb-1" />
+                                    <input type="datetime-local" v-model="form.ceremony_datetime"
+                                        class="w-full rounded-xl border-cuero/20 focus:border-dorado focus:ring-dorado/20 text-cuero" />
+                                </div>
+                                <div>
+                                    <InputLabel value="Dirección" class="mb-1" />
+                                    <TextInput v-model="form.ceremony_address" class="w-full" placeholder="Ej. Calle Hidalgo 123, Centro" />
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <InputLabel value="Latitud" class="mb-1" />
+                                        <TextInput v-model="form.ceremony_lat" class="w-full" placeholder="20.6597" />
+                                    </div>
+                                    <div>
+                                        <InputLabel value="Longitud" class="mb-1" />
+                                        <TextInput v-model="form.ceremony_lng" class="w-full" placeholder="-103.3496" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <InputLabel value="Foto del lugar (opcional)" class="mb-2" />
+                                <div class="relative group rounded-2xl overflow-hidden bg-arena-dark/50 border border-cuero/10"
+                                    :class="(ceremonyPreview ?? photoUrl(props.settings?.ceremony_photo_path)) ? 'h-48' : 'h-40'">
+                                    <img v-if="ceremonyPreview ?? photoUrl(props.settings?.ceremony_photo_path)" :src="ceremonyPreview ?? photoUrl(props.settings?.ceremony_photo_path)" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/30">
+                                        <div class="text-center"><PhotoIcon class="w-8 h-8 mx-auto mb-1" /><span class="text-xs">Sin foto</span></div>
+                                    </div>
+                                    <div class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/30 transition-all flex items-center justify-center">
+                                        <label class="cursor-pointer bg-white/90 hover:bg-white text-cuero px-4 py-2 rounded-xl text-sm font-medium opacity-0 group-hover:opacity-100 transition-all shadow-lg">
+                                            {{ (ceremonyPreview ?? photoUrl(props.settings?.ceremony_photo_path)) ? 'Cambiar' : 'Subir foto' }}
+                                            <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'ceremony_photo')" />
+                                        </label>
+                                    </div>
+                                </div>
+                                <InputError :message="form.errors.ceremony_photo" class="mt-1" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Celebración -->
+                    <div class="p-6">
+                        <h4 class="font-medium text-cuero/70 mb-4 flex items-center gap-2">
+                            <span class="w-7 h-7 bg-dorado/10 text-dorado rounded-full flex items-center justify-center text-sm font-bold">🥂</span>
+                            Celebración
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-4">
+                                <div>
+                                    <InputLabel value="Título / Nombre del lugar" class="mb-1" />
+                                    <TextInput v-model="form.celebration_title" class="w-full" placeholder="Ej. Hacienda El Paraíso" />
+                                </div>
+                                <div>
+                                    <InputLabel value="Fecha y Hora" class="mb-1" />
+                                    <input type="datetime-local" v-model="form.celebration_datetime"
+                                        class="w-full rounded-xl border-cuero/20 focus:border-dorado focus:ring-dorado/20 text-cuero" />
+                                </div>
+                                <div>
+                                    <InputLabel value="Dirección" class="mb-1" />
+                                    <TextInput v-model="form.celebration_address" class="w-full" placeholder="Ej. Av. Principal 456" />
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <InputLabel value="Latitud" class="mb-1" />
+                                        <TextInput v-model="form.celebration_lat" class="w-full" placeholder="20.6597" />
+                                    </div>
+                                    <div>
+                                        <InputLabel value="Longitud" class="mb-1" />
+                                        <TextInput v-model="form.celebration_lng" class="w-full" placeholder="-103.3496" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <InputLabel value="Foto del lugar (opcional)" class="mb-2" />
+                                <div class="relative group rounded-2xl overflow-hidden bg-arena-dark/50 border border-cuero/10"
+                                    :class="(celebrationPreview ?? photoUrl(props.settings?.celebration_photo_path)) ? 'h-48' : 'h-40'">
+                                    <img v-if="celebrationPreview ?? photoUrl(props.settings?.celebration_photo_path)" :src="celebrationPreview ?? photoUrl(props.settings?.celebration_photo_path)" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/30">
+                                        <div class="text-center"><PhotoIcon class="w-8 h-8 mx-auto mb-1" /><span class="text-xs">Sin foto</span></div>
+                                    </div>
+                                    <div class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/30 transition-all flex items-center justify-center">
+                                        <label class="cursor-pointer bg-white/90 hover:bg-white text-cuero px-4 py-2 rounded-xl text-sm font-medium opacity-0 group-hover:opacity-100 transition-all shadow-lg">
+                                            {{ (celebrationPreview ?? photoUrl(props.settings?.celebration_photo_path)) ? 'Cambiar' : 'Subir foto' }}
+                                            <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'celebration_photo')" />
+                                        </label>
+                                    </div>
+                                </div>
+                                <InputError :message="form.errors.celebration_photo" class="mt-1" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══════════ CÓDIGO DE VESTIMENTA ═══════════ -->
+                <div class="bg-white rounded-2xl border border-cuero/10 shadow-sm overflow-hidden">
+                    <div class="px-6 py-5 border-b border-cuero/5">
+                        <h3 class="font-slab text-lg text-cuero">Código de Vestimenta</h3>
+                        <p class="text-sm text-cuero/50 mt-1">Describe el dress code general y sube imágenes de referencia.</p>
+                    </div>
+
+                    <!-- Texto general -->
+                    <div class="p-6 border-b border-cuero/5">
+                        <InputLabel value="Descripción general" class="mb-1" />
+                        <textarea v-model="form.dress_code_general" rows="3"
+                            class="w-full rounded-xl border-cuero/20 focus:border-dorado focus:ring-dorado/20 text-sm"
+                            placeholder="Ej. Formal — Los invitados deben vestir de gala en tonos pastel..."></textarea>
+                    </div>
+
+                    <!-- Imagen general de Dress Code -->
+                    <div class="p-6 border-b border-cuero/5">
+                        <InputLabel value="Imagen de referencia general (moodboard)" class="mb-2" />
+                        <p class="text-xs text-cuero/50 mb-3">Una imagen general que ilustre el estilo del código de vestimenta.</p>
+                        <div class="max-w-md">
+                            <div class="relative group rounded-2xl overflow-hidden bg-arena-dark/50 border border-cuero/10"
+                                :class="dressCodeImagePreview ? 'h-48' : 'h-40'">
+                                <img v-if="dressCodeImagePreview" :src="dressCodeImagePreview" class="w-full h-full object-cover" />
+                                <div v-else class="flex items-center justify-center h-full text-cuero/30">
+                                    <div class="text-center"><PhotoIcon class="w-8 h-8 mx-auto mb-1" /><span class="text-xs">Sin imagen</span></div>
+                                </div>
+                                <button v-if="dressCodeImagePreview" @click="removeImage('dress_code_image')" class="absolute top-2 right-2 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-4 h-4" /></button>
+                                <<div class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/30 transition-all flex items-center justify-center">
+                                    <label class="cursor-pointer bg-white/90 hover:bg-white text-cuero px-4 py-2 rounded-xl text-sm font-medium opacity-0 group-hover:opacity-100 transition-all shadow-lg">
+                                        {{ dressCodeImagePreview ? 'Cambiar' : 'Subir imagen' }}
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_image')" />
+                                    </label>
+                                </div>
+                            </div>
+                            <InputError :message="form.errors.dress_code_image" class="mt-1" />
+                        </div>
+                    </div>
+
+                    <!-- Damas -->
+                    <div class="p-6 border-b border-cuero/5">
+                        <h4 class="font-medium text-cuero/70 mb-4">👩 Damas</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <InputLabel value="Vestido" class="mb-2 text-xs" />
+                                <div class="relative group rounded-xl overflow-hidden bg-arena-dark/50 border border-cuero/10 aspect-square">
+                                    <!-- Simplificado aquí -->
+                                    <img v-if="womenDressPreview" :src="womenDressPreview" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/20"><PhotoIcon class="w-6 h-6" /></div>
+                                    
+                                    <button v-if="womenDressPreview" @click="removeImage('dress_code_women_dress')" class="absolute top-1 right-1 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-3.5 h-3.5" /></button>
+                                    
+                                    <label class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/40 transition-all flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100">
+                                        <span class="bg-white/90 text-cuero px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg">Subir</span>
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_women_dress')" />
+                                    </label>
+                                </div>
+                                <input v-model="form.dress_code_women_dress_desc" type="text" placeholder="Ej. Largo, verde olivo"
+                                    class="w-full mt-2 text-xs rounded-lg border-cuero/20 focus:border-dorado focus:ring-dorado/20" />
+                                <InputError :message="form.errors.dress_code_women_dress" class="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel value="Calzado" class="mb-2 text-xs" />
+                                <div class="relative group rounded-xl overflow-hidden bg-arena-dark/50 border border-cuero/10 aspect-square">
+                                    <img v-if="womenShoesPreview" :src="womenShoesPreview" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/20"><PhotoIcon class="w-6 h-6" /></div>
+                                    <button v-if="womenShoesPreview" @click="removeImage('dress_code_women_shoes')" class="absolute top-1 right-1 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-3.5 h-3.5" /></button>
+                                    <label class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/40 transition-all flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100">
+                                        <span class="bg-white/90 text-cuero px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg">Subir</span>
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_women_shoes')" />
+                                    </label>
+                                </div>
+                                <input v-model="form.dress_code_women_shoes_desc" type="text" placeholder="Ej. Botas vaqueras"
+                                    class="w-full mt-2 text-xs rounded-lg border-cuero/20 focus:border-dorado focus:ring-dorado/20" />
+                                <InputError :message="form.errors.dress_code_women_shoes" class="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel value="Accesorios" class="mb-2 text-xs" />
+                                <div class="relative group rounded-xl overflow-hidden bg-arena-dark/50 border border-cuero/10 aspect-square">
+                                    <img v-if="womenAccessoriesPreview" :src="womenAccessoriesPreview" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/20"><PhotoIcon class="w-6 h-6" /></div>
+                                    <button v-if="womenAccessoriesPreview" @click="removeImage('dress_code_women_accessories')" class="absolute top-1 right-1 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-3.5 h-3.5" /></button>
+                                    <label class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/40 transition-all flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100">
+                                        <span class="bg-white/90 text-cuero px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg">Subir</span>
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_women_accessories')" />
+                                    </label>
+                                </div>
+                                <input v-model="form.dress_code_women_accessories_desc" type="text" placeholder="Ej. Joyería dorada"
+                                    class="w-full mt-2 text-xs rounded-lg border-cuero/20 focus:border-dorado focus:ring-dorado/20" />
+                                <InputError :message="form.errors.dress_code_women_accessories" class="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel value="Otros" class="mb-2 text-xs" />
+                                <div class="relative group rounded-xl overflow-hidden bg-arena-dark/50 border border-cuero/10 aspect-square">
+                                    <img v-if="womenOtherPreview" :src="womenOtherPreview" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/20"><PhotoIcon class="w-6 h-6" /></div>
+                                    <button v-if="womenOtherPreview" @click="removeImage('dress_code_women_other')" class="absolute top-1 right-1 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-3.5 h-3.5" /></button>
+                                    <label class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/40 transition-all flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100">
+                                        <span class="bg-white/90 text-cuero px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg">Subir</span>
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_women_other')" />
+                                    </label>
+                                </div>
+                                <input v-model="form.dress_code_women_other_desc" type="text" placeholder="Ej. Sombrero, ala corta"
+                                    class="w-full mt-2 text-xs rounded-lg border-cuero/20 focus:border-dorado focus:ring-dorado/20" />
+                                <InputError :message="form.errors.dress_code_women_other" class="mt-1" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Caballeros -->
+                    <div class="p-6">
+                        <h4 class="font-medium text-cuero/70 mb-4">👨 Caballeros</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <InputLabel value="Traje" class="mb-2 text-xs" />
+                                <div class="relative group rounded-xl overflow-hidden bg-arena-dark/50 border border-cuero/10 aspect-square">
+                                    <img v-if="menSuitPreview" :src="menSuitPreview" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/20"><PhotoIcon class="w-6 h-6" /></div>
+                                    <button v-if="menSuitPreview" @click="removeImage('dress_code_men_suit')" class="absolute top-1 right-1 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-3.5 h-3.5" /></button>
+                                    <label class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/40 transition-all flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100">
+                                        <span class="bg-white/90 text-cuero px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg">Subir</span>
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_men_suit')" />
+                                    </label>
+                                </div>
+                                <input v-model="form.dress_code_men_suit_desc" type="text" placeholder="Ej. Saco tweed, bolo tie"
+                                    class="w-full mt-2 text-xs rounded-lg border-cuero/20 focus:border-dorado focus:ring-dorado/20" />
+                                <InputError :message="form.errors.dress_code_men_suit" class="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel value="Calzado" class="mb-2 text-xs" />
+                                <div class="relative group rounded-xl overflow-hidden bg-arena-dark/50 border border-cuero/10 aspect-square">
+                                    <img v-if="menShoesPreview" :src="menShoesPreview" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/20"><PhotoIcon class="w-6 h-6" /></div>
+                                    <button v-if="menShoesPreview" @click="removeImage('dress_code_men_shoes')" class="absolute top-1 right-1 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-3.5 h-3.5" /></button>
+                                    <label class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/40 transition-all flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100">
+                                        <span class="bg-white/90 text-cuero px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg">Subir</span>
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_men_shoes')" />
+                                    </label>
+                                </div>
+                                <input v-model="form.dress_code_men_shoes_desc" type="text" placeholder="Ej. Botas de piel café"
+                                    class="w-full mt-2 text-xs rounded-lg border-cuero/20 focus:border-dorado focus:ring-dorado/20" />
+                                <InputError :message="form.errors.dress_code_men_shoes" class="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel value="Accesorios" class="mb-2 text-xs" />
+                                <div class="relative group rounded-xl overflow-hidden bg-arena-dark/50 border border-cuero/10 aspect-square">
+                                    <img v-if="menAccessoriesPreview" :src="menAccessoriesPreview" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/20"><PhotoIcon class="w-6 h-6" /></div>
+                                    <button v-if="menAccessoriesPreview" @click="removeImage('dress_code_men_accessories')" class="absolute top-1 right-1 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-3.5 h-3.5" /></button>
+                                    <label class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/40 transition-all flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100">
+                                        <span class="bg-white/90 text-cuero px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg">Subir</span>
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_men_accessories')" />
+                                    </label>
+                                </div>
+                                <input v-model="form.dress_code_men_accessories_desc" type="text" placeholder="Ej. Reloj, sombrero"
+                                    class="w-full mt-2 text-xs rounded-lg border-cuero/20 focus:border-dorado focus:ring-dorado/20" />
+                                <InputError :message="form.errors.dress_code_men_accessories" class="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel value="Otros" class="mb-2 text-xs" />
+                                <div class="relative group rounded-xl overflow-hidden bg-arena-dark/50 border border-cuero/10 aspect-square">
+                                    <img v-if="menOtherPreview" :src="menOtherPreview" class="w-full h-full object-cover" />
+                                    <div v-else class="flex items-center justify-center h-full text-cuero/20"><PhotoIcon class="w-6 h-6" /></div>
+                                    <button v-if="menOtherPreview" @click="removeImage('dress_code_men_other')" class="absolute top-1 right-1 z-10 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-all shadow-md" type="button" aria-label="Eliminar imagen"><XMarkIcon class="w-3.5 h-3.5" /></button>
+                                    <label class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/40 transition-all flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100">
+                                        <span class="bg-white/90 text-cuero px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg">Subir</span>
+                                        <input type="file" accept="image/*" class="hidden" @change="setPreview($event, 'dress_code_men_other')" />
+                                    </label>
+                                </div>
+                                <input v-model="form.dress_code_men_other_desc" type="text" placeholder="Ej. Chaleco, pañuelo"
+                                    class="w-full mt-2 text-xs rounded-lg border-cuero/20 focus:border-dorado focus:ring-dorado/20" />
+                                <InputError :message="form.errors.dress_code_men_other" class="mt-1" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══════════ RSVP ═══════════ -->
+                <div class="bg-white rounded-2xl border border-cuero/10 shadow-sm overflow-hidden">
+                    <div class="px-6 py-5 border-b border-cuero/5">
+                        <h3 class="font-slab text-lg text-cuero">Confirmación de Asistencia</h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="max-w-sm">
+                            <InputLabel value="Fecha límite para confirmar asistencia" class="mb-1" />
+                            <input type="date" v-model="form.rsvp_deadline"
+                                class="w-full rounded-xl border-cuero/20 focus:border-dorado focus:ring-dorado/20 text-cuero" />
+                            <InputError :message="form.errors.rsvp_deadline" class="mt-1" />
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Save button -->
+            <div class="flex items-center gap-4 mt-8 pb-12">
+                <PrimaryButton @click="submit" :disabled="form.processing" :class="{ 'opacity-50': form.processing }">
+                    {{ form.processing ? 'Guardando...' : 'Guardar Cambios' }}
+                </PrimaryButton>
+                <ActionMessage :on="form.recentlySuccessful" class="ms-3">¡Guardado!</ActionMessage>
+            </div>
+            </div>
+        </div>
+    </div>
+    </AppLayout>
+</template>

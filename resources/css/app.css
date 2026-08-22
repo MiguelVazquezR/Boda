@@ -5,3 +5,8 @@
 [x-cloak] {
     display: none;
 }
+
+/* Oculta el aviso flotante de licencia de PrimeUI (PrimeVue 5) */
+#p-license-host {
+    display: none !important;
+}
