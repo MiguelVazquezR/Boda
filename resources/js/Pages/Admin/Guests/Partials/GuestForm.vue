@@ -91,19 +91,19 @@ function onGroupsUpdated() {
 </script>
 
 <template>
-    <div class="bg-white rounded-2xl border border-cuero/10 shadow-sm overflow-hidden">
-        <div class="px-6 py-5 border-b border-cuero/10 flex items-center justify-between gap-4">
+    <div class="bg-white rounded-2xl border border-tinta/10 shadow-sm overflow-hidden">
+        <div class="px-6 py-5 border-b border-tinta/10 flex items-center justify-between gap-4">
             <div>
-                <h3 class="font-slab text-lg text-cuero">
+                <h3 class="font-slab text-lg text-tinta">
                     {{ isEdit ? 'Editar invitado' : 'Nuevo invitado' }}
                 </h3>
-                <p class="text-sm text-cuero/50 mt-0.5">
+                <p class="text-sm text-tinta/50 mt-0.5">
                     Completa la información del invitado. Los campos con * son obligatorios.
                 </p>
             </div>
             <Link
                 :href="route('admin.guests.index')"
-                class="text-sm text-cuero/50 hover:text-cuero transition-colors"
+                class="text-sm text-tinta/50 hover:text-tinta transition-colors"
             >
                 ← Volver a invitados
             </Link>
@@ -112,7 +112,7 @@ function onGroupsUpdated() {
         <form @submit.prevent="submit" class="px-6 py-6 space-y-8">
             <!-- ── Datos del invitado ── -->
             <section>
-                <h4 class="text-xs uppercase tracking-widest text-dorado font-semibold mb-4">
+                <h4 class="text-xs uppercase tracking-widest text-primary font-semibold mb-4">
                     Datos del invitado
                 </h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -152,7 +152,7 @@ function onGroupsUpdated() {
                         <InputLabel value="Género" />
                         <select
                             v-model="form.gender"
-                            class="mt-1 w-full rounded-xl border border-cuero/20 bg-white text-sm text-cuero px-3.5 py-2.5 focus:border-dorado focus:ring-dorado/20"
+                            class="mt-1 w-full rounded-xl border border-tinta/20 bg-white text-sm text-tinta px-3.5 py-2.5 focus:border-primary focus:ring-primary/20"
                         >
                             <option value="">Seleccionar...</option>
                             <option v-for="opt in genderOptions" :key="opt.value" :value="opt.value">
@@ -167,7 +167,7 @@ function onGroupsUpdated() {
                             <button
                                 type="button"
                                 @click="showGroupsModal = true"
-                                class="text-xs text-mezclilla hover:text-mezclilla-light font-medium transition-colors"
+                                class="text-xs text-primary hover:text-primary-dark font-medium transition-colors"
                             >
                                 Gestionar grupos
                             </button>
@@ -186,8 +186,8 @@ function onGroupsUpdated() {
             </section>
 
             <!-- ── Contacto ── -->
-            <section class="pt-6 border-t border-cuero/10">
-                <h4 class="text-xs uppercase tracking-widest text-dorado font-semibold mb-4">
+            <section class="pt-6 border-t border-tinta/10">
+                <h4 class="text-xs uppercase tracking-widest text-primary font-semibold mb-4">
                     Información de contacto
                 </h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -207,7 +207,7 @@ function onGroupsUpdated() {
                         <InputLabel value="Origen" />
                         <select
                             v-model="form.origin"
-                            class="mt-1 w-full rounded-xl border border-cuero/20 bg-white text-sm text-cuero px-3.5 py-2.5 focus:border-dorado focus:ring-dorado/20"
+                            class="mt-1 w-full rounded-xl border border-tinta/20 bg-white text-sm text-tinta px-3.5 py-2.5 focus:border-primary focus:ring-primary/20"
                         >
                             <option value="">Seleccionar...</option>
                             <option v-for="opt in originOptions" :key="opt.value" :value="opt.value">
@@ -241,8 +241,8 @@ function onGroupsUpdated() {
             </section>
 
             <!-- ── Mesa / asignación ── -->
-            <section class="pt-6 border-t border-cuero/10">
-                <h4 class="text-xs uppercase tracking-widest text-dorado font-semibold mb-4">
+            <section class="pt-6 border-t border-tinta/10">
+                <h4 class="text-xs uppercase tracking-widest text-primary font-semibold mb-4">
                     Asignación
                 </h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -264,7 +264,7 @@ function onGroupsUpdated() {
             </div>
 
             <!-- ── Acciones ── -->
-            <div class="flex items-center justify-end gap-3 pt-4 border-t border-cuero/10">
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-tinta/10">
                 <SecondaryButton type="button" @click="router.visit(route('admin.guests.index'))">
                     Cancelar
                 </SecondaryButton>

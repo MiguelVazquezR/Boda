@@ -8,13 +8,13 @@ const props = defineProps({
 
 const config = {
     guest: {
-        confirmed: { bg: 'bg-olivo/10', text: 'text-olivo', dot: 'bg-olivo', label: 'Confirmado' },
-        pending: { bg: 'bg-dorado/10', text: 'text-dorado', dot: 'bg-dorado', label: 'Pendiente' },
+        confirmed: { bg: 'bg-secondary/10', text: 'text-secondary', dot: 'bg-secondary', label: 'Confirmado' },
+        pending: { bg: 'bg-primary/10', text: 'text-primary', dot: 'bg-primary', label: 'Pendiente' },
         declined: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', label: 'No asistirá' },
     },
     gallery: {
-        approved: { bg: 'bg-olivo/10', text: 'text-olivo', dot: 'bg-olivo', label: 'Aprobada' },
-        pending: { bg: 'bg-dorado/10', text: 'text-dorado', dot: 'bg-dorado', label: 'Pendiente' },
+        approved: { bg: 'bg-secondary/10', text: 'text-secondary', dot: 'bg-secondary', label: 'Aprobada' },
+        pending: { bg: 'bg-primary/10', text: 'text-primary', dot: 'bg-primary', label: 'Pendiente' },
         rejected: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', label: 'Rechazada' },
     },
 };

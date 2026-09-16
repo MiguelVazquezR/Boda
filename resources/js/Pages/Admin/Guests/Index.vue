@@ -16,18 +16,24 @@ import StatusBadge from '@/Components/Admin/StatusBadge.vue';
 import EmptyState from '@/Components/Admin/EmptyState.vue';
 import ConfirmDeleteModal from '@/Components/Admin/ConfirmDeleteModal.vue';
 import GuestDetailModal from './Partials/GuestDetailModal.vue';
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon } from '@heroicons/vue/24/outline';
+import InvitationsManagerModal from './Partials/InvitationsManagerModal.vue';
+import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
     guests: Array,
     filters: Object,
     statusCounts: Object,
+    // Invitaciones digitales (parejas o personas solas) con su link público
+    invitations: { type: Array, default: () => [] },
 });
 
 // ── Filtros de la tabla (client-side: aplican a TODOS los registros, no solo a la página actual) ──
-const globalFilter = ref(props.filters?.search ?? '');
+// En PrimeVue 5 el buscador global vive dentro del objeto `filters` (clave `global`);
+// la prop `globalFilter` de versiones anteriores ya no existe en DataTable.
+const searchInput = ref(props.filters?.search ?? '');
 
 const filters = ref({
+    global: { value: normalizeText(props.filters?.search ?? '') || null, matchMode: 'contains' },
     rsvp_status: { value: props.filters?.status ?? null, matchMode: 'equals' },
     gender: { value: null, matchMode: 'equals' },
     'group.name': { value: null, matchMode: 'equals' },
@@ -37,9 +43,31 @@ const filters = ref({
     table_group: { value: null, matchMode: 'equals' },
 });
 
+/**
+ * Normaliza texto para buscar: minúsculas, sin acentos y sin caracteres especiales.
+ * Coincide con el campo `search_slug` que genera el backend, así buscar "jose"
+ * encuentra a "José" y buscar "garcia" encuentra a "García".
+ */
+function normalizeText(value) {
+    return String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/** Se conserva el texto escrito por el usuario y se filtra por su versión normalizada. */
+function onSearchInput(value) {
+    searchInput.value = value ?? '';
+    filters.value.global.value = normalizeText(value) || null;
+}
+
 function clearFilters() {
-    globalFilter.value = '';
+    searchInput.value = '';
     filters.value = {
+        global: { value: null, matchMode: 'contains' },
         rsvp_status: { value: null, matchMode: 'equals' },
         gender: { value: null, matchMode: 'equals' },
         'group.name': { value: null, matchMode: 'equals' },
@@ -152,12 +180,39 @@ function doDelete() {
 // ── Detail Modal ──
 const viewingGuest = ref(null);
 function openDetail(guest) { viewingGuest.value = guest; }
+
+// ── Invitaciones digitales (parejas / links) ──
+const showInvitationsModal = ref(false);
+// Invitados con los que se abre el modal (los seleccionados en la tabla)
+const invitationMemberIds = ref([]);
+// Filas seleccionadas en la tabla, para crear una invitación en un clic
+const selectedGuests = ref([]);
+
+const selectedGuestIds = computed(() => selectedGuests.value.map((guest) => guest.id));
+
+function openInvitations(prefill = []) {
+    invitationMemberIds.value = prefill;
+    showInvitationsModal.value = true;
+}
+
+/** Abre el modal con los 1 o 2 invitados seleccionados en la tabla. */
+function createInvitationFromSelection() {
+    if (selectedGuestIds.value.length < 1 || selectedGuestIds.value.length > 2) return;
+
+    openInvitations(selectedGuestIds.value);
+}
+
+function closeInvitations() {
+    showInvitationsModal.value = false;
+    invitationMemberIds.value = [];
+    selectedGuests.value = [];
+}
 </script>
 
 <template>
     <AppLayout title="Invitados">
         <template #header>
-            <h2 class="font-slab text-xl text-cuero leading-tight">Invitados</h2>
+            <h2 class="font-slab text-xl text-tinta leading-tight">Invitados</h2>
         </template>
 
         <div class="py-6">
@@ -166,8 +221,8 @@ function openDetail(guest) { viewingGuest.value = guest; }
                     <!-- Toolbar: total + búsqueda + acciones -->
                     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                         <div class="flex flex-wrap items-center gap-3">
-                            <span class="text-sm text-cuero/60">
-                                Total: <strong class="text-cuero">{{ guests.length }}</strong> invitados
+                            <span class="text-sm text-tinta/60">
+                                Total: <strong class="text-tinta">{{ guests.length }}</strong> invitados
                             </span>
                             <Button
                                 label="Limpiar filtros"
@@ -179,13 +234,26 @@ function openDetail(guest) { viewingGuest.value = guest; }
                         </div>
                         <div class="flex flex-wrap items-center gap-3">
                             <div class="relative flex-1 min-w-56">
-                                <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cuero/30 z-10" />
+                                <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-tinta/30 z-10" />
                                 <InputText
-                                    v-model="globalFilter"
+                                    :model-value="searchInput"
+                                    @update:model-value="onSearchInput"
                                     placeholder="Buscar invitado..."
                                     class="!w-full !pl-9"
                                 />
                             </div>
+                            <SecondaryButton @click="openInvitations()" class="flex items-center gap-2 whitespace-nowrap">
+                                <LinkIcon class="w-4 h-4" />
+                                Parejas / Links
+                            </SecondaryButton>
+                            <PrimaryButton
+                                v-if="selectedGuestIds.length && selectedGuestIds.length <= 2"
+                                @click="createInvitationFromSelection"
+                                class="flex items-center gap-2 whitespace-nowrap"
+                            >
+                                <UserGroupIcon class="w-4 h-4" />
+                                Crear invitación ({{ selectedGuestIds.length }})
+                            </PrimaryButton>
                             <SecondaryButton @click="showImportModal = true" class="flex items-center gap-2 whitespace-nowrap">
                                 <ArrowUpTrayIcon class="w-4 h-4" />
                                 Importar CSV
@@ -198,12 +266,12 @@ function openDetail(guest) { viewingGuest.value = guest; }
                     </div>
 
                     <!-- Tabla con filtros por columna y paginación -->
-                    <div v-if="guests.length > 0" class="bg-white rounded-2xl border border-cuero/10 shadow-sm overflow-hidden">
+                    <div v-if="guests.length > 0" class="bg-white rounded-2xl border border-tinta/10 shadow-sm overflow-hidden">
                         <DataTable
                             v-model:filters="filters"
-                            v-model:globalFilter="globalFilter"
+                            v-model:selection="selectedGuests"
                             :value="guests"
-                            :globalFilterFields="['full_name', 'phone', 'city', 'state', 'table_group', 'group.name']"
+                            :globalFilterFields="['search_slug', 'full_name', 'phone', 'city', 'state', 'table_group', 'group.name']"
                             filterDisplay="row"
                             paginator
                             :rows="10"
@@ -216,20 +284,22 @@ function openDetail(guest) { viewingGuest.value = guest; }
                             :currentPageReportTemplate="'Mostrando {first} a {last} de {totalRecords} invitados'"
                         >
                             <template #empty>
-                                <p class="py-6 text-center text-cuero/50 text-sm">
+                                <p class="py-6 text-center text-tinta/50 text-sm">
                                     No se encontraron invitados con los filtros aplicados.
                                 </p>
                             </template>
 
+                            <Column selectionMode="multiple" :exportable="false" :showFilterMenu="false" headerStyle="width: 3rem" />
+
                             <Column field="full_name" header="Nombre" sortable :showFilterMenu="false" style="min-width: 260px">
                                 <template #body="{ data }">
-                                    <span class="font-medium text-cuero">{{ data.full_name }}</span>
+                                    <span class="font-medium text-tinta">{{ data.full_name }}</span>
                                 </template>
                             </Column>
 
                             <Column field="age" header="Edad" sortable :showFilterMenu="false" filterMatchMode="equals">
                                 <template #body="{ data }">
-                                    <span class="text-cuero/70">{{ data.age ?? '—' }}</span>
+                                    <span class="text-tinta/70">{{ data.age ?? '—' }}</span>
                                 </template>
                                 <template #filter>
                                     <Select v-model="filters['age'].value" :options="ageOptions" optionLabel="label" optionValue="value" placeholder="Edad" showClear class="!w-full" />
@@ -238,7 +308,7 @@ function openDetail(guest) { viewingGuest.value = guest; }
 
                             <Column field="gender" header="Género" :showFilterMenu="false">
                                 <template #body="{ data }">
-                                    <span class="text-cuero/70">{{ formatGender(data.gender) }}</span>
+                                    <span class="text-tinta/70">{{ formatGender(data.gender) }}</span>
                                 </template>
                                 <template #filter>
                                     <Select v-model="filters['gender'].value" :options="genderOptions" optionLabel="label" optionValue="value" placeholder="Género" showClear class="!w-full" />
@@ -247,7 +317,7 @@ function openDetail(guest) { viewingGuest.value = guest; }
 
                             <Column field="group.name" header="Grupo" :showFilterMenu="false">
                                 <template #body="{ data }">
-                                    <span class="text-cuero/50">{{ data.group?.name || data.table_group || '—' }}</span>
+                                    <span class="text-tinta/50">{{ data.group?.name || data.table_group || '—' }}</span>
                                 </template>
                                 <template #filter>
                                     <Select v-model="filters['group.name'].value" :options="groupOptions" optionLabel="label" optionValue="value" placeholder="Grupo" showClear class="!w-full" />
@@ -256,13 +326,13 @@ function openDetail(guest) { viewingGuest.value = guest; }
 
                             <Column field="phone" header="Celular" sortable :showFilterMenu="false">
                                 <template #body="{ data }">
-                                    <span class="text-cuero/70">{{ data.phone || '—' }}</span>
+                                    <span class="text-tinta/70">{{ data.phone || '—' }}</span>
                                 </template>
                             </Column>
 
                             <Column field="origin" header="Origen" :showFilterMenu="false">
                                 <template #body="{ data }">
-                                    <span class="text-cuero/70">{{ formatOrigin(data.origin) }}</span>
+                                    <span class="text-tinta/70">{{ formatOrigin(data.origin) }}</span>
                                 </template>
                                 <template #filter>
                                     <Select v-model="filters['origin'].value" :options="originOptions" optionLabel="label" optionValue="value" placeholder="Origen" showClear class="!w-full" />
@@ -271,7 +341,7 @@ function openDetail(guest) { viewingGuest.value = guest; }
 
                             <Column field="city" header="Ciudad" :showFilterMenu="false">
                                 <template #body="{ data }">
-                                    <span class="text-cuero/50">{{ data.city || '—' }}</span>
+                                    <span class="text-tinta/50">{{ data.city || '—' }}</span>
                                 </template>
                                 <template #filter>
                                     <MultiSelect
@@ -289,9 +359,20 @@ function openDetail(guest) { viewingGuest.value = guest; }
                                 </template>
                             </Column>
 
+                            <Column field="invitation.display_name" header="Invitación" :showFilterMenu="false" style="min-width: 180px">
+                                <template #body="{ data }">
+                                    <span v-if="data.invitation"
+                                        class="inline-flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium">
+                                        <LinkIcon class="w-3.5 h-3.5" />
+                                        {{ data.invitation.display_name }}
+                                    </span>
+                                    <span v-else class="text-tinta/40 text-xs">—</span>
+                                </template>
+                            </Column>
+
                             <Column field="table_group" header="Mesa" sortable :showFilterMenu="false" filterMatchMode="equals" style="min-width: 110px">
                                 <template #body="{ data }">
-                                    <span class="text-cuero/70">{{ data.table_group || '—' }}</span>
+                                    <span class="text-tinta/70">{{ data.table_group || '—' }}</span>
                                 </template>
                                 <template #filter>
                                     <Select v-model="filters['table_group'].value" :options="tableGroupOptions" optionLabel="label" optionValue="value" placeholder="Mesa" showClear class="!w-full" />
@@ -310,15 +391,15 @@ function openDetail(guest) { viewingGuest.value = guest; }
                             <Column header="Acciones" :exportable="false" :showFilterMenu="false">
                                 <template #body="{ data }">
                                     <div class="flex items-center justify-end gap-1">
-                                        <button @click="openDetail(data)" class="p-2 text-cuero/30 hover:text-dorado transition-colors rounded-lg hover:bg-dorado/5" title="Ver detalle">
+                                        <button @click="openDetail(data)" class="p-2 text-tinta/30 hover:text-primary transition-colors rounded-lg hover:bg-primary/5" title="Ver detalle">
                                             <EyeIcon class="w-4 h-4" />
                                         </button>
-                                        <button @click="goToEdit(data)" class="p-2 text-cuero/30 hover:text-mezclilla transition-colors rounded-lg hover:bg-mezclilla/5" title="Editar">
+                                        <button @click="goToEdit(data)" class="p-2 text-tinta/30 hover:text-primary transition-colors rounded-lg hover:bg-primary/5" title="Editar">
                                             <PencilIcon class="w-4 h-4" />
                                         </button>
                                         <ConfirmDeleteModal :message="`¿Eliminar a «${data.full_name}»? Esta acción no se puede deshacer y perderá su confirmación de asistencia si ya respondió.`" @confirm="doDelete">
                                             <template #default="{ open: openDel }">
-                                                <button @click="confirmDelete(data); openDel()" class="p-2 text-cuero/30 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50" title="Eliminar">
+                                                <button @click="confirmDelete(data); openDel()" class="p-2 text-tinta/30 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50" title="Eliminar">
                                                     <TrashIcon class="w-4 h-4" />
                                                 </button>
                                             </template>
@@ -338,22 +419,22 @@ function openDetail(guest) { viewingGuest.value = guest; }
                         <template #title>Importar Invitados (CSV)</template>
                         <template #content>
                             <div class="space-y-4">
-                                <p class="text-sm text-cuero/60">
-                                    El archivo debe incluir la columna <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">first_name</code> (o <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">full_name</code>). Puede incluir: <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">last_name</code>, <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">age</code>, <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">gender</code>, <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">group</code>, <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">phone</code>, <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">origin</code>, <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">state</code>, <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">city</code> y <code class="bg-arena px-1.5 py-0.5 rounded text-cuero">table_group</code>. También acepta nombres en español (nombre, apellidos, edad, género, grupo, celular, origen, estado, ciudad, mesa).
+                                <p class="text-sm text-tinta/60">
+                                    El archivo debe incluir la columna <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">first_name</code> (o <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">full_name</code>). Puede incluir: <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">last_name</code>, <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">age</code>, <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">gender</code>, <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">group</code>, <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">phone</code>, <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">origin</code>, <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">state</code>, <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">city</code> y <code class="bg-niebla px-1.5 py-0.5 rounded text-tinta">table_group</code>. También acepta nombres en español (nombre, apellidos, edad, género, grupo, celular, origen, estado, ciudad, mesa).
                                 </p>
-                                <div class="border-2 border-dashed border-cuero/20 rounded-xl p-6 text-center">
-                                    <DocumentTextIcon class="w-8 h-8 text-cuero/30 mx-auto mb-2" />
-                                    <label class="cursor-pointer text-mezclilla hover:text-mezclilla-light text-sm font-medium">
+                                <div class="border-2 border-dashed border-tinta/20 rounded-xl p-6 text-center">
+                                    <DocumentTextIcon class="w-8 h-8 text-tinta/30 mx-auto mb-2" />
+                                    <label class="cursor-pointer text-primary hover:text-primary-dark text-sm font-medium">
                                         Seleccionar archivo CSV
                                         <input ref="csvInput" type="file" accept=".csv,.txt" class="hidden" @change="onCsvFile" />
                                     </label>
-                                    <p v-if="importForm.csv_file" class="text-cuero/50 text-xs mt-2">{{ importForm.csv_file.name }}</p>
+                                    <p v-if="importForm.csv_file" class="text-tinta/50 text-xs mt-2">{{ importForm.csv_file.name }}</p>
                                 </div>
                                 <InputError :message="importForm.errors.csv_file" />
 
                                 <div v-if="importResult" :class="importResultIsError
                                     ? 'bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-600'
-                                    : 'bg-olivo/10 border border-olivo/20 rounded-xl p-4 text-sm text-olivo'">
+                                    : 'bg-secondary/10 border border-secondary/20 rounded-xl p-4 text-sm text-secondary'">
                                     {{ importResult }}
                                 </div>
                             </div>
@@ -368,6 +449,15 @@ function openDetail(guest) { viewingGuest.value = guest; }
 
                     <!-- ── Guest Detail Modal (componente separado) ── -->
                     <GuestDetailModal :guest="viewingGuest" @close="viewingGuest = null" />
+
+                    <!-- ── Invitaciones digitales (parejas / links) ── -->
+                    <InvitationsManagerModal
+                        :show="showInvitationsModal"
+                        :guests="guests"
+                        :invitations="invitations"
+                        :initial-member-ids="invitationMemberIds"
+                        @close="closeInvitations"
+                    />
                 </div>
             </div>
         </div>

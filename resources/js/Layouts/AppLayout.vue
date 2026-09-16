@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import Toast from 'primevue/toast';
 import ApplicationMark from '@/Components/ApplicationMark.vue';
 import Banner from '@/Components/Banner.vue';
 import Dropdown from '@/Components/Dropdown.vue';
@@ -31,9 +32,12 @@ const logout = () => {
     <div>
         <Head :title="title" />
 
+        <!-- Avisos flotantes (éxito / error) de todo el panel -->
+        <Toast position="top-right" />
+
         <Banner />
 
-        <div class="min-h-screen bg-gray-100">
+        <div class="min-h-screen bg-niebla">
             <nav class="bg-white border-b border-gray-100">
                 <!-- Primary Navigation Menu -->
                 <div class="max-w-screen-2xl mx-auto px-3 sm:px-4 lg:px-6">
@@ -56,6 +60,9 @@ const logout = () => {
                                 <template v-if="$page.props.auth.user?.is_admin">
                                     <NavLink :href="route('admin.guests.index')" :active="route().current('admin.guests.*')">
                                         Invitados
+                                    </NavLink>
+                                    <NavLink :href="route('admin.tables.index')" :active="route().current('admin.tables.*')">
+                                        Mesas
                                     </NavLink>
                                     <NavLink :href="route('admin.faqs.index')" :active="route().current('admin.faqs.*')">
                                         Preguntas Frecuentes
@@ -218,6 +225,9 @@ const logout = () => {
                         <template v-if="$page.props.auth.user?.is_admin">
                             <ResponsiveNavLink :href="route('admin.guests.index')" :active="route().current('admin.guests.*')">
                                 Invitados
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.tables.index')" :active="route().current('admin.tables.*')">
+                                Mesas
                             </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('admin.faqs.index')" :active="route().current('admin.faqs.*')">
                                 Preguntas Frecuentes

@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useForm, router } from '@inertiajs/vue3';
+import { useForm, router, Head } from '@inertiajs/vue3';
 import axios from 'axios';
 import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon } from '@heroicons/vue/24/outline';
 import DressCodeGrid from '@/Components/DressCode/DressCodeGrid.vue';
 import DressCodeCarousel from '@/Components/DressCode/DressCodeCarousel.vue';
+import { parseEventDate, formatEventDate as formatDate, formatEventTime as formatTime } from '@/Composables/useEventDate';
 
 // ── Props ────────────────────────────────────────────────────────
 const props = defineProps({
@@ -12,6 +13,14 @@ const props = defineProps({
     faqs: Array,
     galleryPhotos: Array,
     scheduleItems: Array,
+    // true cuando ya existe al menos un invitado con mesa asignada en la BD
+    tablesReady: Boolean,
+    // Invitación digital reconocida: llega por el link personal del invitado
+    // (/i/{token}/confirmar) o por la cookie que se guardó al abrir su invitación
+    // desde Canva. Cuando existe, el RSVP aparece con los nombres ya cargados.
+    invitation: Object,
+    // Abrir la página directamente en la sección de confirmación
+    focusRsvp: Boolean,
 });
 
 // ── Ilustración predeterminada del itinerario según el título ──
@@ -48,9 +57,8 @@ const countdown = ref({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 let countdownInterval = null;
 
 function updateCountdown() {
-    const eventDate = props.settings?.event_datetime
-        ? new Date(props.settings.event_datetime)
-        : new Date('2026-11-14T16:00:00');
+    const eventDate = parseEventDate(props.settings?.event_datetime)
+        ?? new Date('2026-11-14T16:00:00');
 
     const now = new Date();
     const diff = eventDate - now;
@@ -75,46 +83,19 @@ onMounted(() => {
 });
 onUnmounted(() => { if (countdownInterval) clearInterval(countdownInterval); });
 
-// ── Formatted date ───────────────────────────────────────────────
-const eventDateFormatted = computed(() => {
-    if (!props.settings?.event_datetime) return 'Fecha por anunciar';
-    return new Date(props.settings.event_datetime).toLocaleDateString('es-MX', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
-});
+// ── Fechas formateadas (siempre con la hora configurada en el panel) ──
+const eventDateFormatted = computed(() => formatDate(props.settings?.event_datetime));
+const eventTimeFormatted = computed(() => formatTime(props.settings?.event_datetime));
 
-const eventTimeFormatted = computed(() => {
-    if (!props.settings?.event_datetime) return '';
-    return new Date(props.settings.event_datetime).toLocaleTimeString('es-MX', {
-        hour: '2-digit', minute: '2-digit',
-    });
-});
+// ── Ceremonia / Celebración ─────────────────────────────────────
+const ceremonyDateFormatted = computed(() => formatDate(props.settings?.ceremony_datetime));
+const ceremonyTimeFormatted = computed(() => formatTime(props.settings?.ceremony_datetime));
 
-// ── Ceremony / Celebration formatted dates ─────────────────────
-const ceremonyDateFormatted = computed(() => {
-    if (!props.settings?.ceremony_datetime) return 'Fecha por anunciar';
-    return new Date(props.settings.ceremony_datetime).toLocaleDateString('es-MX', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
-});
-const ceremonyTimeFormatted = computed(() => {
-    if (!props.settings?.ceremony_datetime) return '';
-    return new Date(props.settings.ceremony_datetime).toLocaleTimeString('es-MX', {
-        hour: '2-digit', minute: '2-digit',
-    });
-});
-const celebrationDateFormatted = computed(() => {
-    if (!props.settings?.celebration_datetime) return 'Fecha por anunciar';
-    return new Date(props.settings.celebration_datetime).toLocaleDateString('es-MX', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
-});
-const celebrationTimeFormatted = computed(() => {
-    if (!props.settings?.celebration_datetime) return '';
-    return new Date(props.settings.celebration_datetime).toLocaleTimeString('es-MX', {
-        hour: '2-digit', minute: '2-digit',
-    });
-});
+const celebrationDateFormatted = computed(() => formatDate(props.settings?.celebration_datetime));
+const celebrationTimeFormatted = computed(() => formatTime(props.settings?.celebration_datetime));
+
+// Fecha límite de confirmación (fecha sin hora)
+const rsvpDeadlineFormatted = computed(() => formatDate(props.settings?.rsvp_deadline, ''));
 
 // ── Google Maps / Waze links ─────────────────────────────────────
 function makeMapsUrl(lat, lng, addr) {
@@ -213,6 +194,56 @@ function submitRsvp() {
     });
 }
 
+// ── RSVP con invitación reconocida ───────────────────────────────
+// El invitado llega desde su link personal (/i/{token}/confirmar) o desde el
+// botón «Confirmar asistencia» del sitio de Canva, que recuerda la invitación
+// en una cookie. En ese caso no hay que buscar el nombre: aparecen las personas
+// de la invitación y cada una responde por separado.
+const invitationForm = useForm({
+    attending: null,
+    rsvp_message: '',
+    invitation_token: '',
+});
+
+const invitationResponses = ref({});
+
+/** Respuesta en edición de una persona de la invitación. */
+function responseFor(member) {
+    if (!invitationResponses.value[member.id]) {
+        invitationResponses.value[member.id] = { attending: null, message: '' };
+    }
+
+    return invitationResponses.value[member.id];
+}
+
+function submitInvitationRsvp(member) {
+    const response = responseFor(member);
+    if (response.attending === null) return;
+
+    invitationForm.attending = response.attending;
+    invitationForm.rsvp_message = response.message;
+    // El token permite al backend comprobar que confirma SU propia invitación.
+    invitationForm.invitation_token = props.invitation?.token ?? '';
+
+    invitationForm.post(route('rsvp.confirm', member.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            response.attending = null;
+            response.message = '';
+        },
+    });
+}
+
+// Al entrar por el link directo (/rsvp o /i/{token}/confirmar) la página abre
+// directamente en la sección de confirmación.
+onMounted(() => {
+    if (!props.focusRsvp) return;
+
+    setTimeout(() => {
+        document.getElementById('rsvp')?.scrollIntoView({ behavior: 'smooth' });
+    }, 250);
+});
+
 // ── Dress Code ──────────────────────────────────────────────────
 const viewMode = ref('grid');
 
@@ -269,41 +300,80 @@ function closeLightbox() { lightboxImage.value = null; }
 
 // ── WhatsApp fallback ────────────────────────────────────────────
 const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20lista%20de%20invitados%20de%20la%20boda.%20%C2%BFNos%20pueden%20ayudar%3F';
+
+// ── Encuentra tu Mesa ────────────────────────────────────────────
+// Las mesas se asignan en el panel admin ~15 días antes del evento. La sección se
+// activa automáticamente en cuanto hay al menos un invitado con mesa registrada.
+const tableQuery = ref('');
+const tableResults = ref([]);
+const tableLoading = ref(false);
+const tableSearched = ref(false);
+let tableDebounceTimer = null;
+
+async function searchTables() {
+    const q = tableQuery.value.trim();
+    if (q.length < 2) {
+        tableResults.value = [];
+        tableSearched.value = false;
+        return;
+    }
+
+    tableLoading.value = true;
+    try {
+        const { data } = await axios.get('/mesas/buscar', { params: { q } });
+        tableResults.value = data;
+    } catch {
+        tableResults.value = [];
+    } finally {
+        tableLoading.value = false;
+        tableSearched.value = true;
+    }
+}
+
+function onTableInput() {
+    clearTimeout(tableDebounceTimer);
+    tableSearched.value = false;
+    tableDebounceTimer = setTimeout(searchTables, 350);
+}
+
+onUnmounted(() => clearTimeout(tableDebounceTimer));
 </script>
 
 <template>
-    <div class="bg-arena min-h-screen text-cuero">
+     <Head title="Eli & José" />
+    <div class="bg-niebla min-h-screen text-tinta">
 
         <!-- ════════════════ NAVBAR ════════════════ -->
         <nav
             :class="[
                 'fixed top-0 z-50 w-full transition-all duration-500',
                 isScrolled
-                    ? 'bg-arena/95 backdrop-blur-md shadow-lg shadow-cuero/5 py-2'
+                    ? 'bg-niebla/95 backdrop-blur-md shadow-lg shadow-tinta/5 py-2'
                     : 'bg-transparent py-4'
             ]"
         >
             <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between">
                 <div class="flex items-center gap-5"> 
                     <img src="/img/logo.png" alt="Logo" class="h-8 pb-1" />
-                    <button @click="scrollTo('hero')" class="font-script text-2xl md:text-3xl text-dorado transition-colors hover:text-dorado-dark">
+                    <button @click="scrollTo('hero')" class="font-script text-2xl md:text-3xl text-primary transition-colors hover:text-primary-dark">
                         Boda
                     </button>
                 </div>  
 
                 <!-- Desktop nav -->
                 <div class="hidden md:flex items-center gap-1 text-sm font-medium">
-                    <button @click="scrollTo('historia')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Historia</button>
-                    <button @click="scrollTo('evento')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Evento</button>
-                    <button @click="scrollTo('tiempos')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Tiempos</button>
-                    <button @click="scrollTo('dresscode')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Dress Code</button>
-                    <button @click="scrollTo('rsvp')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">RSVP</button>
-                    <button @click="scrollTo('faq')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">FAQ</button>
-                    <button @click="scrollTo('galeria')" class="px-4 py-2 rounded-full text-cuero/80 hover:text-cuero hover:bg-arena-dark/30 transition-all">Galería</button>
+                    <button @click="scrollTo('historia')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Historia</button>
+                    <button @click="scrollTo('evento')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Evento</button>
+                    <button @click="scrollTo('tiempos')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Tiempos</button>
+                    <button @click="scrollTo('dresscode')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Dress Code</button>
+                    <button @click="scrollTo('rsvp')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">RSVP</button>
+                    <button @click="scrollTo('mesas')" class="hidden lg:inline-block px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Mi Mesa</button>
+                    <button @click="scrollTo('faq')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">FAQ</button>
+                    <button @click="scrollTo('galeria')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Galería</button>
                 </div>
 
                 <!-- Mobile hamburger -->
-                <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden p-2 text-cuero">
+                <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden p-2 text-tinta">
                     <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path v-if="!mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                         <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -312,15 +382,16 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
             </div>
 
             <!-- Mobile menu -->
-            <div v-if="mobileMenuOpen" class="md:hidden bg-white backdrop-blur-md border-t border-cuero/10 px-4 pb-4 animate-fade-in shadow-lg">
+            <div v-if="mobileMenuOpen" class="md:hidden bg-white backdrop-blur-md border-t border-tinta/10 px-4 pb-4 animate-fade-in shadow-lg">
                 <div class="flex flex-col gap-1 pt-2">
-                    <button @click="scrollTo('historia')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Nuestra Historia</button>
-                    <button @click="scrollTo('evento')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">El Evento</button>
-                    <button @click="scrollTo('tiempos')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Tiempos</button>
-                    <button @click="scrollTo('dresscode')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Dress Code</button>
-                    <button @click="scrollTo('rsvp')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Confirmar Asistencia</button>
-                    <button @click="scrollTo('faq')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Preguntas Frecuentes</button>
-                    <button @click="scrollTo('galeria')" class="text-left px-4 py-3 rounded-lg text-cuero/80 hover:text-cuero hover:bg-arena-dark/30">Galería</button>
+                    <button @click="scrollTo('historia')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Nuestra Historia</button>
+                    <button @click="scrollTo('evento')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">El Evento</button>
+                    <button @click="scrollTo('tiempos')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Tiempos</button>
+                    <button @click="scrollTo('dresscode')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Dress Code</button>
+                    <button @click="scrollTo('rsvp')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Confirmar Asistencia</button>
+                    <button @click="scrollTo('mesas')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Encuentra tu Mesa</button>
+                    <button @click="scrollTo('faq')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Preguntas Frecuentes</button>
+                    <button @click="scrollTo('galeria')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Galería</button>
                 </div>
             </div>
         </nav>
@@ -329,25 +400,25 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
         <section id="hero" class="relative min-h-screen flex items-center justify-center overflow-hidden">
             <!-- Background image with overlay -->
             <div class="absolute inset-0 z-0">
-                <div class="w-full h-full bg-gradient-to-br from-cuero via-olivo-dark to-mezclilla"></div>
+                <div class="w-full h-full bg-gradient-to-br from-tinta via-primary-dark to-primary"></div>
                 <!-- Overlays -->
-                <div class="absolute inset-0 bg-gradient-to-b from-cuero/60 via-cuero/30 to-cuero/70"></div>
-                <div class="absolute inset-0 bg-gradient-to-t from-arena/90 via-transparent to-transparent"></div>
+                <div class="absolute inset-0 bg-gradient-to-b from-tinta/60 via-tinta/30 to-tinta/70"></div>
+                <div class="absolute inset-0 bg-gradient-to-t from-niebla/90 via-transparent to-transparent"></div>
             </div>
 
             <!-- Hero content -->
             <div class="relative z-10 text-center px-4 max-w-4xl mx-auto animate-fade-in">
                 <!-- Decorative top line -->
                 <div class="flex items-center justify-center gap-4 mb-8">
-                    <div class="h-px w-12 bg-dorado/60"></div>
-                    <span class="text-dorado text-sm tracking-[0.3em] uppercase font-medium">Nos casamos</span>
-                    <div class="h-px w-12 bg-dorado/60"></div>
+                    <div class="h-px w-12 bg-primary/60"></div>
+                    <span class="text-primary text-sm tracking-[0.3em] uppercase font-medium">Nos casamos</span>
+                    <div class="h-px w-12 bg-primary/60"></div>
                 </div>
 
                 <!-- Names -->
                 <h1 class="font-script text-5xl sm:text-6xl md:text-7xl lg:text-8xl text-white drop-shadow-lg mb-6 leading-tight">
                     <span class="block">José Rodríguez</span>
-                    <span class="text-dorado text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-slab font-normal">&</span>
+                    <span class="text-primary text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-slab font-normal">&</span>
                     <span class="block">Elizabeth Mendoza</span>
                 </h1>
 
@@ -372,7 +443,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
 
                 <!-- CTA Button -->
                 <button @click="scrollTo('rsvp')"
-                    class="inline-flex items-center gap-2 bg-dorado hover:bg-dorado-dark text-white font-slab font-bold px-10 py-4 rounded-full text-lg transition-all duration-300 shadow-lg shadow-dorado/30 hover:shadow-xl hover:shadow-dorado/40 hover:scale-105 active:scale-95">
+                    class="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-slab font-bold px-10 py-4 rounded-full text-lg transition-all duration-300 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-105 active:scale-95">
                     Confirmar Asistencia
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
@@ -380,54 +451,56 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
 
             <!-- Scroll indicator -->
             <button @click="scrollTo('historia')" class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 animate-pulse-soft">
-                <svg class="w-8 h-8 text-dorado" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
             </button>
         </section>
 
         <!-- ════════════════ NUESTRA HISTORIA ════════════════ -->
-        <section id="historia" class="py-24 md:py-32 px-4 bg-arena">
+        <section id="historia" class="py-24 md:py-32 px-4 bg-niebla">
             <div class="max-w-5xl mx-auto">
                 <!-- Section header -->
                 <div class="text-center mb-16">
                     <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="h-px w-10 bg-dorado"></div>
-                        <span class="text-olivo text-xs tracking-[0.3em] uppercase font-medium">Nuestra Historia</span>
-                        <div class="h-px w-10 bg-dorado"></div>
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Nuestra Historia</span>
+                        <div class="h-px w-10 bg-primary"></div>
                     </div>
-                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-cuero">Cómo nos conocimos</h2>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">Cómo nos conocimos</h2>
                 </div>
 
                 <!-- Story block 1: Cómo nos conocimos -->
                 <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center mb-20">
                     <div class="order-2 md:order-1 animate-slide-up">
-                        <p class="text-cuero/80 text-lg leading-relaxed">
+                        <p class="text-tinta/80 text-lg leading-relaxed">
                             {{ settings?.how_we_met_story || 'Aquí puedes escribir tu historia. Cómo se conocieron, ese momento mágico en que sus miradas se cruzaron y supieron que algo especial estaba por comenzar.' }}
                         </p>
                     </div>
                     <div class="order-1 md:order-2 animate-slide-up">
-                        <div class="relative">
-                            <div class="w-full h-72 md:h-96 rounded-2xl bg-gradient-to-br from-olivo/20 to-cuero/10 border border-cuero/10 overflow-hidden shadow-lg">
-                                <img v-if="settings?.how_we_met_photo_path" :src="'/storage/' + settings.how_we_met_photo_path" alt="Cómo nos conocimos" class="w-full h-full object-contain" />
-                                <div v-else class="flex items-center justify-center h-full text-cuero/30 font-script text-6xl">Foto 1</div>
-                            </div>
-                            <div class="absolute -bottom-3 -right-3 w-full h-full rounded-2xl border-2 border-dorado/40 -z-10"></div>
-                        </div>
+                        <!-- Solo la imagen, con esquinas redondeadas y sin contenedor ni fondo -->
+                        <img
+                            v-if="settings?.how_we_met_photo_path"
+                            :src="'/storage/' + settings.how_we_met_photo_path"
+                            alt="Cómo nos conocimos"
+                            class="w-full h-auto rounded-3xl shadow-lg"
+                        />
+                        <p v-else class="text-center text-tinta/30 font-script text-6xl py-10">Foto 1</p>
                     </div>
                 </div>
 
                 <!-- Story block 2: La propuesta -->
                 <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
                     <div class="animate-slide-up">
-                        <div class="relative">
-                            <div class="w-full h-72 md:h-96 rounded-2xl bg-gradient-to-bl from-olivo/20 to-cuero/10 border border-cuero/10 overflow-hidden shadow-lg">
-                                <img v-if="settings?.proposal_photo_path" :src="'/storage/' + settings.proposal_photo_path" alt="La propuesta" class="w-full h-full object-contain" />
-                                <div v-else class="flex items-center justify-center h-full text-cuero/30 font-script text-6xl">Foto 2</div>
-                            </div>
-                            <div class="absolute -bottom-3 -left-3 w-full h-full rounded-2xl border-2 border-dorado/40 -z-10"></div>
-                        </div>
+                        <!-- Solo la imagen, con esquinas redondeadas y sin contenedor ni fondo -->
+                        <img
+                            v-if="settings?.proposal_photo_path"
+                            :src="'/storage/' + settings.proposal_photo_path"
+                            alt="La propuesta"
+                            class="w-full h-auto rounded-3xl shadow-lg"
+                        />
+                        <p v-else class="text-center text-tinta/30 font-script text-6xl py-10">Foto 2</p>
                     </div>
                     <div class="animate-slide-up">
-                        <p class="text-cuero/80 text-lg leading-relaxed">
+                        <p class="text-tinta/80 text-lg leading-relaxed">
                             {{ settings?.proposal_story || 'Y luego vino la propuesta... Un momento que cambió sus vidas para siempre. Rodeados del paisaje que tanto aman, con el corazón latiendo fuerte, la pregunta que lo selló todo.' }}
                         </p>
                     </div>
@@ -436,41 +509,44 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
         </section>
 
         <!-- ════════════════ EL EVENTO ════════════════ -->
-        <section id="evento" class="py-24 md:py-32 px-4 bg-olivo/5">
+        <section id="evento" class="py-24 md:py-32 px-4 bg-secondary/5">
             <div class="max-w-5xl mx-auto">
                 <div class="text-center mb-16">
                     <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="h-px w-10 bg-dorado"></div>
-                        <span class="text-olivo text-xs tracking-[0.3em] uppercase font-medium">Cuándo & Dónde</span>
-                        <div class="h-px w-10 bg-dorado"></div>
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Cuándo & Dónde</span>
+                        <div class="h-px w-10 bg-primary"></div>
                     </div>
-                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-cuero">El Gran Día</h2>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">El Gran Día</h2>
                 </div>
 
                 <div class="grid md:grid-cols-2 gap-8 md:gap-16">
                     <!-- Ceremonia -->
-                    <div class="bg-white/70 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-cuero/10 shadow-lg shadow-cuero/5 animate-slide-up">
-                        <div class="w-14 h-14 bg-olivo/10 rounded-2xl flex items-center justify-center mb-6">
-                            <svg class="w-7 h-7 text-olivo" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="bg-white/70 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-tinta/10 shadow-lg shadow-tinta/5 animate-slide-up">
+                        <div class="w-14 h-14 bg-secondary/10 rounded-2xl flex items-center justify-center mb-6">
+                            <svg class="w-7 h-7 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
                             </svg>
                         </div>
-                        <h3 class="font-slab text-xl text-cuero mb-2">{{ settings?.ceremony_title || 'La Ceremonia' }}</h3>
-                        <p class="text-cuero/60 text-sm mb-1">{{ ceremonyDateFormatted }}</p>
-                        <p class="text-cuero/60 text-sm mb-4" v-if="settings?.ceremony_datetime">{{ ceremonyTimeFormatted }} hrs</p>
-                        <p class="text-cuero/70 mb-1">{{ settings?.ceremony_address || 'Por definir' }}</p>
-                        <!-- Ceremony photo -->
-                        <div v-if="settings?.ceremony_photo_path" class="mb-4 rounded-xl overflow-hidden bg-arena">
-                            <img :src="'/storage/' + settings.ceremony_photo_path" alt="Ceremonia" class="w-full h-40 object-contain rounded-xl" />
-                        </div>
+                        <h3 class="font-slab text-xl text-tinta mb-2">{{ settings?.ceremony_title || 'La Ceremonia' }}</h3>
+                        <p class="text-tinta/60 text-sm mb-1">{{ ceremonyDateFormatted }}</p>
+                        <p class="text-tinta/60 text-sm mb-4" v-if="settings?.ceremony_datetime">{{ ceremonyTimeFormatted }} hrs</p>
+                        <p class="text-tinta/70 mb-1">{{ settings?.ceremony_address || 'Por definir' }}</p>
+                        <!-- Ceremony photo: sin contenedor ni fondo, esquinas redondeadas -->
+                        <img
+                            v-if="settings?.ceremony_photo_path"
+                            :src="'/storage/' + settings.ceremony_photo_path"
+                            alt="Ceremonia"
+                            class="w-full h-40 object-cover rounded-2xl mb-4"
+                        />
                         <div class="flex flex-wrap gap-3" v-if="settings?.ceremony_address">
                             <a :href="ceremonyMapsUrl" target="_blank" rel="noopener"
-                                class="inline-flex items-center gap-2 bg-mezclilla hover:bg-mezclilla-light text-white px-5 py-3 rounded-xl text-sm font-medium transition-all hover:shadow-lg">
+                                class="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-xl text-sm font-medium transition-all hover:shadow-lg">
                                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
                                 Google Maps
                             </a>
                             <a :href="ceremonyWazeUrl" target="_blank" rel="noopener"
-                                class="inline-flex items-center gap-2 bg-cuero hover:bg-cuero-light text-white px-5 py-3 rounded-xl text-sm font-medium transition-all hover:shadow-lg">
+                                class="inline-flex items-center gap-2 bg-secondary hover:bg-secondary-dark text-tinta px-5 py-3 rounded-xl text-sm font-medium transition-all hover:shadow-lg">
                                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 22h20L12 2zm0 4l7 14H5l7-14z"/></svg>
                                 Waze
                             </a>
@@ -478,28 +554,31 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                     </div>
 
                     <!-- Celebración -->
-                    <div class="bg-white/70 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-cuero/10 shadow-lg shadow-cuero/5 animate-slide-up" style="animation-delay: 0.2s">
-                        <div class="w-14 h-14 bg-dorado/10 rounded-2xl flex items-center justify-center mb-6">
-                            <svg class="w-7 h-7 text-dorado" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="bg-white/70 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-tinta/10 shadow-lg shadow-tinta/5 animate-slide-up" style="animation-delay: 0.2s">
+                        <div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
+                            <svg class="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0A2.702 2.702 0 003 15.546M21 12.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0A2.702 2.702 0 003 12.546"/>
                             </svg>
                         </div>
-                        <h3 class="font-slab text-xl text-cuero mb-2">{{ settings?.celebration_title || 'La Celebración' }}</h3>
-                        <p class="text-cuero/60 text-sm mb-1">{{ celebrationDateFormatted }}</p>
-                        <p class="text-cuero/60 text-sm mb-4" v-if="settings?.celebration_datetime">{{ celebrationTimeFormatted }} hrs</p>
-                        <p class="text-cuero/70 mb-1">{{ settings?.celebration_address || 'Por definir' }}</p>
-                        <!-- Celebration photo -->
-                        <div v-if="settings?.celebration_photo_path" class="mb-4 rounded-xl overflow-hidden bg-arena">
-                            <img :src="'/storage/' + settings.celebration_photo_path" alt="Celebración" class="w-full h-40 object-contain rounded-xl" />
-                        </div>
+                        <h3 class="font-slab text-xl text-tinta mb-2">{{ settings?.celebration_title || 'La Celebración' }}</h3>
+                        <p class="text-tinta/60 text-sm mb-1">{{ celebrationDateFormatted }}</p>
+                        <p class="text-tinta/60 text-sm mb-4" v-if="settings?.celebration_datetime">{{ celebrationTimeFormatted }} hrs</p>
+                        <p class="text-tinta/70 mb-1">{{ settings?.celebration_address || 'Por definir' }}</p>
+                        <!-- Celebration photo: sin contenedor ni fondo, esquinas redondeadas -->
+                        <img
+                            v-if="settings?.celebration_photo_path"
+                            :src="'/storage/' + settings.celebration_photo_path"
+                            alt="Celebración"
+                            class="w-full h-40 object-cover rounded-2xl mb-4"
+                        />
                         <div class="flex flex-wrap gap-3" v-if="settings?.celebration_address">
                             <a :href="celebrationMapsUrl" target="_blank" rel="noopener"
-                                class="inline-flex items-center gap-2 bg-mezclilla hover:bg-mezclilla-light text-white px-5 py-3 rounded-xl text-sm font-medium transition-all hover:shadow-lg">
+                                class="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-xl text-sm font-medium transition-all hover:shadow-lg">
                                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
                                 Google Maps
                             </a>
                             <a :href="celebrationWazeUrl" target="_blank" rel="noopener"
-                                class="inline-flex items-center gap-2 bg-cuero hover:bg-cuero-light text-white px-5 py-3 rounded-xl text-sm font-medium transition-all hover:shadow-lg">
+                                class="inline-flex items-center gap-2 bg-secondary hover:bg-secondary-dark text-tinta px-5 py-3 rounded-xl text-sm font-medium transition-all hover:shadow-lg">
                                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 22h20L12 2zm0 4l7 14H5l7-14z"/></svg>
                                 Waze
                             </a>
@@ -510,24 +589,24 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
         </section>
 
         <!-- ════════════════ TIEMPOS (ITINERARIO) ════════════════ -->
-        <section id="tiempos" class="py-16 md:py-24 px-4 bg-arena">
+        <section id="tiempos" class="py-16 md:py-24 px-4 bg-niebla">
             <div class="max-w-5xl mx-auto">
                 <!-- Section header -->
                 <div class="text-center mb-10">
                     <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="h-px w-10 bg-dorado"></div>
-                        <span class="text-olivo text-xs tracking-[0.3em] uppercase font-medium">Tiempos</span>
-                        <div class="h-px w-10 bg-dorado"></div>
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Tiempos</span>
+                        <div class="h-px w-10 bg-primary"></div>
                     </div>
-                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-cuero">El Itinerario</h2>
-                    <p class="text-cuero/60 mt-3 max-w-xl mx-auto">Nuestra noche paso a paso, para que no te pierdas de nada.</p>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">El Itinerario</h2>
+                    <p class="text-tinta/60 mt-3 max-w-xl mx-auto">Nuestra noche paso a paso, para que no te pierdas de nada.</p>
                 </div>
 
                 <!-- Timeline: imagen a la izquierda, hora + descripción a la derecha -->
                 <div v-if="scheduleItems && scheduleItems.length" class="relative">
                     <!-- Línea central (desktop) y línea izquierda (móvil) -->
-                    <div class="hidden md:block absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 bg-cuero/15"></div>
-                    <div class="md:hidden absolute left-2 top-0 bottom-0 w-px bg-cuero/15"></div>
+                    <div class="hidden md:block absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 bg-tinta/15"></div>
+                    <div class="md:hidden absolute left-2 top-0 bottom-0 w-px bg-tinta/15"></div>
 
                     <div class="space-y-6 md:space-y-0">
                         <div
@@ -536,59 +615,59 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                             class="relative md:grid md:grid-cols-2 md:gap-10 md:items-center md:py-3"
                         >
                             <!-- Marcador de la línea -->
-                            <div class="absolute left-2 md:left-1/2 top-6 md:top-1/2 -translate-x-1/2 md:-translate-y-1/2 w-3.5 h-3.5 rounded-full bg-dorado border-2 border-white shadow"></div>
+                            <div class="absolute left-2 md:left-1/2 top-6 md:top-1/2 -translate-x-1/2 md:-translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary border-2 border-white shadow"></div>
 
                             <!-- Imagen (izquierda): cuadrada, siempre se ve completa sin cortarse -->
                             <div class="pl-10 md:pl-0 md:pr-6 mb-3 md:mb-0 flex md:justify-end">
-                                <div class="flex-shrink-0 w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-xl overflow-hidden shadow border border-cuero/10 bg-gradient-to-br from-dorado/25 via-arena to-olivo/20 flex items-center justify-center">
+                                <div class="flex-shrink-0 w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-xl overflow-hidden shadow border border-tinta/10 bg-gradient-to-br from-primary/25 via-niebla to-secondary/20 flex items-center justify-center">
                                     <img
                                         v-if="item.image_path"
                                         :src="'/storage/' + item.image_path"
                                         :alt="item.title"
                                         class="w-full h-full object-contain"
                                     />
-                                    <component v-else :is="scheduleIcon(item.title)" class="w-12 h-12 text-dorado/70" />
+                                    <component v-else :is="scheduleIcon(item.title)" class="w-12 h-12 text-primary/70" />
                                 </div>
                             </div>
 
                             <!-- Texto (derecha): hora + qué se hará -->
                             <div class="pl-10 md:pl-12">
-                                <span class="font-display font-bold text-xl md:text-2xl text-dorado">{{ item.time || '—' }}</span>
-                                <h3 class="font-display text-lg md:text-xl text-cuero mt-0.5 mb-1">{{ item.title }}</h3>
-                                <p v-if="item.description" class="text-cuero/70 text-sm leading-relaxed">{{ item.description }}</p>
+                                <span class="font-display font-bold text-xl md:text-2xl text-primary">{{ item.time || '—' }}</span>
+                                <h3 class="font-display text-lg md:text-xl text-tinta mt-0.5 mb-1">{{ item.title }}</h3>
+                                <p v-if="item.description" class="text-tinta/70 text-sm leading-relaxed">{{ item.description }}</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <p v-else class="text-center text-cuero/50 italic py-10">
+                <p v-else class="text-center text-tinta/50 italic py-10">
                     Muy pronto compartiremos el itinerario de la celebración.
                 </p>
             </div>
         </section>
 
         <!-- ════════════════ DRESS CODE ════════════════ -->
-        <section id="dresscode" class="py-24 md:py-32 px-4 bg-arena">
+        <section id="dresscode" class="py-24 md:py-32 px-4 bg-niebla">
             <div class="max-w-5xl mx-auto">
                 <div class="text-center mb-16">
                     <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="h-px w-10 bg-dorado"></div>
-                        <span class="text-olivo text-xs tracking-[0.3em] uppercase font-medium">Dress Code</span>
-                        <div class="h-px w-10 bg-dorado"></div>
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Dress Code</span>
+                        <div class="h-px w-10 bg-primary"></div>
                     </div>
-                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-cuero">Código de Vestimenta</h2>
-                    <p class="text-cuero/60 mt-4 max-w-xl mx-auto">Western Chic — Vaquero Formal</p>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">Código de Vestimenta</h2>
+                    <p class="text-tinta/60 mt-4 max-w-xl mx-auto">Western Chic — Vaquero Formal</p>
                 </div>
 
-                <div class="bg-white/70 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-cuero/10 shadow-lg shadow-cuero/5">
+                <div class="bg-white/70 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-tinta/10 shadow-lg shadow-tinta/5">
                     <!-- Texto general -->
-                    <p class="text-cuero/80 text-lg leading-relaxed mb-10 text-center max-w-3xl mx-auto">
-                        {{ settings?.dress_code_general || 'Queremos que te sientas espectacular. Te invitamos a unirte a nuestra celebración con un look Western Chic: elegante, sofisticado, con ese toque vaquero que tanto amamos. La paleta sugerida son tonos tierra, neutros cálidos, verdes olivo sutiles y toques de dorado.' }}
+                    <p class="text-tinta/80 text-lg leading-relaxed mb-10 text-center max-w-3xl mx-auto">
+                        {{ settings?.dress_code_general || 'Queremos que te sientas espectacular. Te invitamos a unirte a nuestra celebración con un look Western Chic: elegante, sofisticado, con ese toque vaquero que tanto amamos. La paleta sugerida son tonos tierra, neutros cálidos y toques de azul cielo y coral.' }}
                     </p>
 
                     <!-- Imagen de referencia general -->
                     <div v-if="settings?.dress_code_image_url" class="mb-10">
-                        <div class="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden bg-arena">
+                        <div class="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden bg-niebla">
                             <img
                                 :src="settings.dress_code_image_url"
                                 alt="Referencia de vestimenta"
@@ -601,16 +680,16 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                     <div class="flex justify-center gap-2 mb-8">
                         <button
                             @click="viewMode = 'grid'"
-                            :class="viewMode === 'grid' ? 'bg-mezclilla text-white' : 'bg-white text-cuero/50 hover:bg-arena'"
-                            class="p-2 rounded-lg transition-colors border border-cuero/10"
+                            :class="viewMode === 'grid' ? 'bg-primary text-white' : 'bg-white text-tinta/50 hover:bg-niebla'"
+                            class="p-2 rounded-lg transition-colors border border-tinta/10"
                             aria-label="Vista de cuadrícula"
                         >
                             <Squares2X2Icon class="w-5 h-5" />
                         </button>
                         <button
                             @click="viewMode = 'carousel'"
-                            :class="viewMode === 'carousel' ? 'bg-mezclilla text-white' : 'bg-white text-cuero/50 hover:bg-arena'"
-                            class="p-2 rounded-lg transition-colors border border-cuero/10"
+                            :class="viewMode === 'carousel' ? 'bg-primary text-white' : 'bg-white text-tinta/50 hover:bg-niebla'"
+                            class="p-2 rounded-lg transition-colors border border-tinta/10"
                             aria-label="Vista de carrusel"
                         >
                             <Square3Stack3DIcon class="w-5 h-5" />
@@ -622,8 +701,8 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         <!-- Damas -->
                         <div class="text-center">
                             <div class="inline-flex items-center gap-3 mb-6">
-                                <svg class="w-6 h-6 text-dorado" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-                                <h3 class="font-slab text-xl text-cuero">Damas</h3>
+                                <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                                <h3 class="font-slab text-xl text-tinta">Damas</h3>
                             </div>
                             <DressCodeGrid v-if="viewMode === 'grid'" :items="womenItems" />
                             <DressCodeCarousel v-else :items="womenItems" />
@@ -632,8 +711,8 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         <!-- Caballeros -->
                         <div class="text-center">
                             <div class="inline-flex items-center gap-3 mb-6">
-                                <svg class="w-6 h-6 text-dorado" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
-                                <h3 class="font-slab text-xl text-cuero">Caballeros</h3>
+                                <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+                                <h3 class="font-slab text-xl text-tinta">Caballeros</h3>
                             </div>
                             <DressCodeGrid v-if="viewMode === 'grid'" :items="menItems" />
                             <DressCodeCarousel v-else :items="menItems" />
@@ -644,48 +723,135 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
         </section>
 
         <!-- ════════════════ RSVP ════════════════ -->
-        <section id="rsvp" class="py-24 md:py-32 px-4 bg-olivo/5">
+        <section id="rsvp" class="py-24 md:py-32 px-4 bg-secondary/5">
             <div class="max-w-2xl mx-auto">
                 <div class="text-center mb-16">
                     <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="h-px w-10 bg-dorado"></div>
-                        <span class="text-olivo text-xs tracking-[0.3em] uppercase font-medium">RSVP</span>
-                        <div class="h-px w-10 bg-dorado"></div>
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">RSVP</span>
+                        <div class="h-px w-10 bg-primary"></div>
                     </div>
-                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-cuero">Confirma tu Asistencia</h2>
-                    <p class="text-cuero/60 mt-4" v-if="settings?.rsvp_deadline">
-                        Fecha límite: {{ new Date(settings.rsvp_deadline).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) }}
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">Confirma tu Asistencia</h2>
+                    <p class="text-tinta/60 mt-4" v-if="settings?.rsvp_deadline">
+                        Fecha límite: {{ rsvpDeadlineFormatted }}
                     </p>
                 </div>
 
                 <!-- Success state -->
-                <div v-if="rsvpSuccess" class="text-center bg-olivo/10 border border-olivo/20 rounded-3xl p-10 animate-fade-in">
-                    <div class="w-16 h-16 bg-olivo/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-olivo" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                <div v-if="rsvpSuccess" class="text-center bg-secondary/10 border border-secondary/20 rounded-3xl p-10 animate-fade-in">
+                    <div class="w-16 h-16 bg-secondary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     </div>
-                    <h3 class="font-slab text-xl text-cuero mb-2">¡Gracias por confirmar!</h3>
-                    <p class="text-cuero/60">Hemos registrado tu respuesta. ¡Nos vemos en la boda!</p>
+                    <h3 class="font-slab text-xl text-tinta mb-2">¡Gracias por confirmar!</h3>
+                    <p class="text-tinta/60">Hemos registrado tu respuesta. ¡Nos vemos en la boda!</p>
+                </div>
+
+                <!-- Invitación reconocida: llega por link personal o por la cookie -->
+                <div v-else-if="invitation" class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-tinta/10 shadow-lg shadow-tinta/5 animate-fade-in">
+                    <div class="flex items-start gap-4 mb-6">
+                        <div class="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="font-slab text-xl text-tinta">¡Hola, {{ invitation.display_name }}!</p>
+                            <p class="text-tinta/60 text-sm mt-1">
+                                Esta es tu invitación personal. Confirma la asistencia de cada persona.
+                            </p>
+                        </div>
+                    </div>
+
+                    <p v-if="invitationForm.errors.invitation_token"
+                        class="mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                        {{ invitationForm.errors.invitation_token }}
+                    </p>
+
+                    <div class="space-y-4">
+                        <div v-for="member in invitation.members" :key="member.id"
+                            class="rounded-2xl border border-tinta/10 bg-niebla/50 p-5">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <p class="font-medium text-tinta">{{ member.full_name }}</p>
+                                <span v-if="member.rsvp_status === 'confirmed'"
+                                    class="text-xs bg-secondary/10 text-secondary px-3 py-1 rounded-full font-medium">Confirmado</span>
+                                <span v-else-if="member.rsvp_status === 'declined'"
+                                    class="text-xs bg-red-100 text-red-500 px-3 py-1 rounded-full font-medium">No asistirá</span>
+                                <span v-else
+                                    class="text-xs bg-white border border-tinta/10 text-tinta/50 px-3 py-1 rounded-full font-medium">Pendiente</span>
+                            </div>
+
+                            <p v-if="member.rsvp_message" class="mt-3 text-tinta/50 text-sm italic">"{{ member.rsvp_message }}"</p>
+
+                            <template v-if="member.rsvp_status === 'pending'">
+                                <div class="grid grid-cols-2 gap-3 mt-4">
+                                    <button
+                                        @click="responseFor(member).attending = true"
+                                        :class="responseFor(member).attending === true
+                                            ? 'bg-secondary text-white border-secondary shadow-lg shadow-secondary/20'
+                                            : 'bg-white text-tinta/60 border-tinta/20 hover:border-secondary/50'"
+                                        class="p-3 rounded-2xl border-2 transition-all text-center font-medium text-sm"
+                                    >
+                                        <span class="text-xl block mb-0.5">🤠</span>
+                                        Sí, asistiré
+                                    </button>
+                                    <button
+                                        @click="responseFor(member).attending = false"
+                                        :class="responseFor(member).attending === false
+                                            ? 'bg-tinta text-white border-tinta shadow-lg shadow-tinta/20'
+                                            : 'bg-white text-tinta/60 border-tinta/20 hover:border-tinta/50'"
+                                        class="p-3 rounded-2xl border-2 transition-all text-center font-medium text-sm"
+                                    >
+                                        <span class="text-xl block mb-0.5">😔</span>
+                                        No podré asistir
+                                    </button>
+                                </div>
+                                <textarea
+                                    v-model="responseFor(member).message"
+                                    rows="2"
+                                    placeholder="Mensaje para los novios (opcional)"
+                                    class="w-full mt-3 px-4 py-3 rounded-2xl border-2 border-tinta/20 bg-white text-tinta placeholder-tinta/30 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none text-sm"
+                                ></textarea>
+
+                                <button
+                                    @click="submitInvitationRsvp(member)"
+                                    :disabled="responseFor(member).attending === null || invitationForm.processing"
+                                    class="w-full mt-3 py-3 rounded-2xl font-slab font-bold transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    :class="responseFor(member).attending === false
+                                        ? 'bg-tinta hover:bg-tinta-light text-white shadow-lg shadow-tinta/20'
+                                        : 'bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/20'"
+                                >
+                                    {{ invitationForm.processing ? 'Enviando...' : 'Guardar respuesta' }}
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <a :href="route('rsvp.forget')"
+                        class="mt-6 inline-flex items-center gap-2 text-tinta/40 hover:text-tinta text-xs transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        ¿No eres {{ invitation.display_name }}? Buscar mi nombre
+                    </a>
                 </div>
 
                 <!-- Search / Form -->
-                <div v-else class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-cuero/10 shadow-lg shadow-cuero/5">
+                <div v-else class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-tinta/10 shadow-lg shadow-tinta/5">
                     <!-- Phase 1: Search -->
                     <div v-if="!selectedGuest">
-                        <label class="block font-slab text-cuero mb-2 text-lg">Busca tu nombre</label>
-                        <p class="text-cuero/50 text-sm mb-4">Escribe tu nombre completo como aparece en la invitación</p>
+                        <label class="block font-slab text-tinta mb-2 text-lg">Busca tu nombre</label>
+                        <p class="text-tinta/50 text-sm mb-4">Escribe tu nombre completo como aparece en la invitación</p>
                         <div class="relative">
-                            <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-cuero/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-tinta/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                             <input
                                 v-model="rsvpQuery"
                                 @input="onRsvpInput"
                                 type="text"
                                 placeholder="Ej. María García López"
-                                class="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-cuero/20 bg-white text-cuero placeholder-cuero/30 focus:border-dorado focus:ring-2 focus:ring-dorado/20 transition-all outline-none text-lg"
+                                class="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-tinta/20 bg-white text-tinta placeholder-tinta/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none text-lg"
                             />
                         </div>
 
                         <!-- Loading -->
-                        <div v-if="rsvpLoading" class="flex items-center justify-center gap-2 mt-4 text-cuero/50">
+                        <div v-if="rsvpLoading" class="flex items-center justify-center gap-2 mt-4 text-tinta/50">
                             <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                             Buscando...
                         </div>
@@ -695,26 +861,26 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                             <div
                                 v-for="guest in rsvpResults" :key="guest.id"
                                 @click="selectGuest(guest)"
-                                class="flex items-center justify-between p-4 rounded-xl border border-cuero/10 bg-arena hover:bg-arena-dark/50 hover:border-dorado/30 cursor-pointer transition-all group"
+                                class="flex items-center justify-between p-4 rounded-xl border border-tinta/10 bg-niebla hover:bg-niebla-dark/50 hover:border-primary/30 cursor-pointer transition-all group"
                             >
                                 <div>
-                                    <p class="font-medium text-cuero group-hover:text-cuero">{{ guest.full_name }}</p>
+                                    <p class="font-medium text-tinta group-hover:text-tinta">{{ guest.full_name }}</p>
                                 </div>
                                 <span
                                     v-if="guest.rsvp_status === 'confirmed'"
-                                    class="text-xs bg-olivo/10 text-olivo px-3 py-1 rounded-full font-medium"
+                                    class="text-xs bg-secondary/10 text-secondary px-3 py-1 rounded-full font-medium"
                                 >Confirmado</span>
                                 <span
                                     v-else-if="guest.rsvp_status === 'declined'"
                                     class="text-xs bg-red-100 text-red-500 px-3 py-1 rounded-full font-medium"
                                 >Declinado</span>
-                                <svg v-else class="w-5 h-5 text-cuero/30 group-hover:text-dorado transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                <svg v-else class="w-5 h-5 text-tinta/30 group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                             </div>
                         </div>
 
                         <!-- No results -->
                         <div v-if="rsvpQuery.length >= 2 && !rsvpLoading && rsvpResults.length === 0" class="mt-6 text-center">
-                            <p class="text-cuero/60 mb-4">No encontramos tu nombre en la lista.</p>
+                            <p class="text-tinta/60 mb-4">No encontramos tu nombre en la lista.</p>
                             <a :href="whatsappLink" target="_blank" rel="noopener"
                                 class="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-5 py-3 rounded-xl text-sm font-medium transition-all">
                                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.652-2.059-.174-.297-.02-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
@@ -725,21 +891,21 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
 
                     <!-- Phase 2: Confirmation Form -->
                     <div v-else class="animate-fade-in">
-                        <button @click="resetRsvp" class="flex items-center gap-2 text-cuero/50 hover:text-cuero mb-6 transition-colors text-sm">
+                        <button @click="resetRsvp" class="flex items-center gap-2 text-tinta/50 hover:text-tinta mb-6 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                             Buscar otro invitado
                         </button>
 
-                        <p class="font-slab text-xl text-cuero mb-8">¡Hola, {{ selectedGuest.full_name }}!</p>
+                        <p class="font-slab text-xl text-tinta mb-8">¡Hola, {{ selectedGuest.full_name }}!</p>
 
                         <!-- Attending toggle -->
-                        <label class="block font-medium text-cuero mb-3">¿Asistirás?</label>
+                        <label class="block font-medium text-tinta mb-3">¿Asistirás?</label>
                         <div class="grid grid-cols-2 gap-3 mb-6">
                             <button
                                 @click="attending = true"
                                 :class="attending === true
-                                    ? 'bg-olivo text-white border-olivo shadow-lg shadow-olivo/20'
-                                    : 'bg-white text-cuero/60 border-cuero/20 hover:border-olivo/50'"
+                                    ? 'bg-secondary text-white border-secondary shadow-lg shadow-secondary/20'
+                                    : 'bg-white text-tinta/60 border-tinta/20 hover:border-secondary/50'"
                                 class="p-4 rounded-2xl border-2 transition-all text-center font-medium"
                             >
                                 <span class="text-2xl block mb-1">🤠</span>
@@ -748,8 +914,8 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                             <button
                                 @click="attending = false"
                                 :class="attending === false
-                                    ? 'bg-cuero text-white border-cuero shadow-lg shadow-cuero/20'
-                                    : 'bg-white text-cuero/60 border-cuero/20 hover:border-cuero/50'"
+                                    ? 'bg-tinta text-white border-tinta shadow-lg shadow-tinta/20'
+                                    : 'bg-white text-tinta/60 border-tinta/20 hover:border-tinta/50'"
                                 class="p-4 rounded-2xl border-2 transition-all text-center font-medium"
                             >
                                 <span class="text-2xl block mb-1">😔</span>
@@ -759,9 +925,9 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
 
                         <!-- Message -->
                         <div class="mb-8">
-                            <label class="block font-medium text-cuero mb-2">Mensaje para los novios <span class="text-cuero/40 font-normal">(opcional)</span></label>
+                            <label class="block font-medium text-tinta mb-2">Mensaje para los novios <span class="text-tinta/40 font-normal">(opcional)</span></label>
                             <textarea v-model="rsvpMessage" rows="3" placeholder="Déjanos un mensaje, felicitación o nota..."
-                                class="w-full px-4 py-3 rounded-2xl border-2 border-cuero/20 bg-white text-cuero placeholder-cuero/30 focus:border-dorado focus:ring-2 focus:ring-dorado/20 outline-none transition-all resize-none"></textarea>
+                                class="w-full px-4 py-3 rounded-2xl border-2 border-tinta/20 bg-white text-tinta placeholder-tinta/30 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none"></textarea>
                         </div>
 
                         <!-- Submit -->
@@ -770,8 +936,8 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                             :disabled="attending === null || rsvpForm.processing"
                             class="w-full py-4 rounded-2xl font-slab font-bold text-lg transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
                             :class="attending === false
-                                ? 'bg-cuero hover:bg-cuero-light text-white shadow-lg shadow-cuero/20'
-                                : 'bg-dorado hover:bg-dorado-dark text-white shadow-lg shadow-dorado/20'"
+                                ? 'bg-tinta hover:bg-tinta-light text-white shadow-lg shadow-tinta/20'
+                                : 'bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/20'"
                         >
                             <span v-if="rsvpForm.processing" class="inline-flex items-center gap-2">
                                 <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
@@ -784,31 +950,130 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
             </div>
         </section>
 
+        <!-- ════════════════ ENCUENTRA TU MESA ════════════════ -->
+        <section id="mesas" class="py-24 md:py-32 px-4 bg-niebla">
+            <div class="max-w-2xl mx-auto">
+                <div class="text-center mb-16">
+                    <div class="flex items-center justify-center gap-4 mb-4">
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Mesas</span>
+                        <div class="h-px w-10 bg-primary"></div>
+                    </div>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">Encuentra tu Mesa</h2>
+                    <p class="text-tinta/60 mt-4">Busca tu nombre y te diremos en qué mesa te esperamos y quiénes te acompañan.</p>
+                </div>
+
+                <div class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-tinta/10 shadow-lg shadow-tinta/5">
+                    <!-- Aún no hay mesas asignadas -->
+                    <div v-if="!tablesReady" class="text-center">
+                        <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M6 6v12m12-12v12M4 18h16M9 10h6" />
+                            </svg>
+                        </div>
+                        <h3 class="font-slab text-xl text-tinta mb-2">Muy pronto</h3>
+                        <p class="text-tinta/60">
+                            Estamos acomodando a cada invitado en su mesa. Podrás consultarla aquí
+                            aproximadamente 15 días antes del evento.
+                        </p>
+                    </div>
+
+                    <!-- Buscador -->
+                    <div v-else>
+                        <label class="block font-slab text-tinta mb-2 text-lg">Busca tu nombre</label>
+                        <p class="text-tinta/50 text-sm mb-4">Escribe tu nombre completo como aparece en la invitación</p>
+                        <div class="relative">
+                            <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-tinta/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <input
+                                v-model="tableQuery"
+                                @input="onTableInput"
+                                type="text"
+                                placeholder="Ej. María García López"
+                                class="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-tinta/20 bg-white text-tinta placeholder-tinta/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none text-lg"
+                            />
+                        </div>
+
+                        <!-- Loading -->
+                        <div v-if="tableLoading" class="flex items-center justify-center gap-2 mt-4 text-tinta/50">
+                            <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            Buscando...
+                        </div>
+
+                        <!-- Resultados: invitado + su mesa + los demás invitados de esa mesa -->
+                        <div v-if="tableResults.length > 0" class="mt-4 space-y-3">
+                            <div
+                                v-for="guest in tableResults" :key="guest.id"
+                                class="p-4 rounded-xl border border-tinta/10 bg-niebla"
+                            >
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p class="font-medium text-tinta">{{ guest.full_name }}</p>
+                                        <p v-if="guest.group_name" class="text-tinta/40 text-xs mt-0.5">{{ guest.group_name }}</p>
+                                    </div>
+                                    <span class="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-medium">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M6 6v12m12-12v12M4 18h16M9 10h6" />
+                                        </svg>
+                                        Mesa {{ guest.table_group }}
+                                    </span>
+                                </div>
+
+                                <!-- Compañeros de mesa: se muestran debajo de la mesa asignada -->
+                                <div v-if="guest.tablemates && guest.tablemates.length" class="mt-3 pt-3 border-t border-tinta/10">
+                                    <p class="text-tinta/50 text-xs uppercase tracking-wider font-medium mb-2">
+                                        También en tu mesa · {{ guest.tablemates.length }}
+                                    </p>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <span
+                                            v-for="(mate, i) in guest.tablemates" :key="i"
+                                            class="text-xs bg-white border border-tinta/10 text-tinta/70 px-2.5 py-1 rounded-full"
+                                        >{{ mate }}</span>
+                                    </div>
+                                </div>
+                                <p v-else class="mt-3 pt-3 border-t border-tinta/10 text-tinta/40 text-xs italic">
+                                    Por ahora no hay más invitados asignados a esta mesa.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Sin resultados -->
+                        <div v-if="tableSearched && !tableLoading && tableResults.length === 0 && tableQuery.trim().length >= 2" class="mt-6 text-center">
+                            <p class="text-tinta/60 mb-4">No encontramos tu nombre entre las mesas asignadas.</p>
+                            <a :href="whatsappLink" target="_blank" rel="noopener"
+                                class="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-5 py-3 rounded-xl text-sm font-medium transition-all">
+                                Contáctanos por WhatsApp
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- ════════════════ FAQ ════════════════ -->
-        <section id="faq" class="py-24 md:py-32 px-4 bg-arena">
+        <section id="faq" class="py-24 md:py-32 px-4 bg-niebla">
             <div class="max-w-3xl mx-auto">
                 <div class="text-center mb-16">
                     <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="h-px w-10 bg-dorado"></div>
-                        <span class="text-olivo text-xs tracking-[0.3em] uppercase font-medium">FAQ</span>
-                        <div class="h-px w-10 bg-dorado"></div>
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">FAQ</span>
+                        <div class="h-px w-10 bg-primary"></div>
                     </div>
-                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-cuero">Preguntas Frecuentes</h2>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">Preguntas Frecuentes</h2>
                 </div>
 
                 <div v-if="faqs && faqs.length > 0" class="space-y-3">
                     <div
                         v-for="faq in faqs" :key="faq.id"
-                        class="bg-white/80 rounded-2xl border border-cuero/10 overflow-hidden transition-all duration-300"
+                        class="bg-white/80 rounded-2xl border border-tinta/10 overflow-hidden transition-all duration-300"
                         :class="{ 'shadow-md': activeFaq === faq.id }"
                     >
                         <button
                             @click="toggleFaq(faq.id)"
                             class="w-full flex items-center justify-between p-5 md:p-6 text-left"
                         >
-                            <span class="font-slab text-cuero pr-4">{{ faq.question }}</span>
+                            <span class="font-slab text-tinta pr-4">{{ faq.question }}</span>
                             <svg
-                                class="w-5 h-5 text-dorado flex-shrink-0 transition-transform duration-300"
+                                class="w-5 h-5 text-primary flex-shrink-0 transition-transform duration-300"
                                 :class="{ 'rotate-180': activeFaq === faq.id }"
                                 fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             >
@@ -817,7 +1082,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         </button>
                         <div
                             v-if="activeFaq === faq.id"
-                            class="px-5 md:px-6 pb-5 md:pb-6 text-cuero/70 leading-relaxed animate-fade-in"
+                            class="px-5 md:px-6 pb-5 md:pb-6 text-tinta/70 leading-relaxed animate-fade-in"
                             v-html="faq.answer.replace(/\n/g, '<br>')"
                         ></div>
                     </div>
@@ -832,16 +1097,16 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         { q: '¿Cuál es la fecha límite para confirmar?', a: 'Agradecemos tu confirmación antes de la fecha límite indicada para asegurar tu lugar en el banquete.' },
                         { q: '¿Qué pasa si confirmo y luego no puedo asistir?', a: 'Te pedimos que nos avises con la mayor anticipación posible a través de la misma página o contactando directamente a los novios para poder reajustar los espacios.' },
                     ]" :key="i"
-                        class="bg-white/80 rounded-2xl border border-cuero/10 overflow-hidden transition-all duration-300"
+                        class="bg-white/80 rounded-2xl border border-tinta/10 overflow-hidden transition-all duration-300"
                         :class="{ 'shadow-md': activeFaq === i }"
                     >
                         <button @click="toggleFaq(i)" class="w-full flex items-center justify-between p-5 md:p-6 text-left">
-                            <span class="font-slab text-cuero pr-4">{{ faq.q }}</span>
-                            <svg class="w-5 h-5 text-dorado flex-shrink-0 transition-transform duration-300" :class="{ 'rotate-180': activeFaq === i }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <span class="font-slab text-tinta pr-4">{{ faq.q }}</span>
+                            <svg class="w-5 h-5 text-primary flex-shrink-0 transition-transform duration-300" :class="{ 'rotate-180': activeFaq === i }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </button>
-                        <div v-if="activeFaq === i" class="px-5 md:px-6 pb-5 md:pb-6 text-cuero/70 leading-relaxed animate-fade-in">
+                        <div v-if="activeFaq === i" class="px-5 md:px-6 pb-5 md:pb-6 text-tinta/70 leading-relaxed animate-fade-in">
                             {{ faq.a }}
                         </div>
                     </div>
@@ -850,37 +1115,37 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
         </section>
 
         <!-- ════════════════ GALERÍA ════════════════ -->
-        <section id="galeria" class="py-24 md:py-32 px-4 bg-olivo/5">
+        <section id="galeria" class="py-24 md:py-32 px-4 bg-secondary/5">
             <div class="max-w-6xl mx-auto">
                 <div class="text-center mb-16">
                     <div class="flex items-center justify-center gap-4 mb-4">
-                        <div class="h-px w-10 bg-dorado"></div>
-                        <span class="text-olivo text-xs tracking-[0.3em] uppercase font-medium">Galería</span>
-                        <div class="h-px w-10 bg-dorado"></div>
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Galería</span>
+                        <div class="h-px w-10 bg-primary"></div>
                     </div>
-                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-cuero">Momentos Inolvidables</h2>
-                    <p class="text-cuero/60 mt-4">Comparte tus fotos con nosotros</p>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">Momentos Inolvidables</h2>
+                    <p class="text-tinta/60 mt-4">Comparte tus fotos con nosotros</p>
                 </div>
 
                 <!-- Upload area -->
-                <div class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-cuero/10 shadow-lg mb-10">
+                <div class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-tinta/10 shadow-lg mb-10">
                     <div class="text-center">
-                        <div class="w-16 h-16 bg-dorado/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                            <svg class="w-8 h-8 text-dorado" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                         </div>
-                        <h3 class="font-slab text-xl text-cuero mb-2">📸 Sube tus fotos</h3>
-                        <p class="text-cuero/50 text-sm mb-6">Las fotos serán revisadas antes de publicarse</p>
+                        <h3 class="font-slab text-xl text-tinta mb-2">📸 Sube tus fotos</h3>
+                        <p class="text-tinta/50 text-sm mb-6">Las fotos serán revisadas antes de publicarse</p>
 
                         <!-- Drag & Drop + Input -->
                         <label
-                            class="block border-2 border-dashed border-cuero/20 hover:border-dorado/50 rounded-2xl p-8 md:p-10 cursor-pointer transition-all bg-arena/50 hover:bg-arena-dark/30"
+                            class="block border-2 border-dashed border-tinta/20 hover:border-primary/50 rounded-2xl p-8 md:p-10 cursor-pointer transition-all bg-niebla/50 hover:bg-niebla-dark/30"
                             @dragover.prevent
                             @drop.prevent="(e) => { if (e.dataTransfer.files[0]) { galleryForm.image = e.dataTransfer.files[0]; galleryPreview = URL.createObjectURL(e.dataTransfer.files[0]); } }"
                         >
                             <input type="file" accept="image/*" class="hidden" @change="onGalleryFile" />
                             <div v-if="!galleryPreview">
-                                <svg class="w-10 h-10 text-cuero/30 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                                <span class="text-cuero/50 text-sm">Arrastra tu foto aquí o haz clic para seleccionar</span>
+                                <svg class="w-10 h-10 text-tinta/30 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                                <span class="text-tinta/50 text-sm">Arrastra tu foto aquí o haz clic para seleccionar</span>
                             </div>
                             <img v-else :src="galleryPreview" class="max-h-48 mx-auto rounded-xl shadow-md" />
                         </label>
@@ -888,14 +1153,14 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         <!-- Uploader name -->
                         <div class="mt-4">
                             <input v-model="galleryForm.uploader_name" type="text" placeholder="Tu nombre (opcional)"
-                                class="w-full max-w-sm px-4 py-3 rounded-2xl border-2 border-cuero/20 bg-white text-cuero placeholder-cuero/30 focus:border-dorado focus:ring-2 focus:ring-dorado/20 outline-none transition-all text-center" />
+                                class="w-full max-w-sm px-4 py-3 rounded-2xl border-2 border-tinta/20 bg-white text-tinta placeholder-tinta/30 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all text-center" />
                         </div>
 
                         <!-- Upload button -->
                         <button
                             @click="submitGallery"
                             :disabled="!galleryForm.image || galleryForm.processing"
-                            class="mt-4 inline-flex items-center gap-2 bg-dorado hover:bg-dorado-dark disabled:bg-cuero/20 disabled:text-cuero/30 text-white font-slab font-bold px-8 py-3 rounded-full transition-all duration-300 shadow-lg shadow-dorado/20 hover:shadow-xl disabled:shadow-none"
+                            class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primary-dark disabled:bg-tinta/20 disabled:text-tinta/30 text-white font-slab font-bold px-8 py-3 rounded-full transition-all duration-300 shadow-lg shadow-primary/20 hover:shadow-xl disabled:shadow-none"
                         >
                             <span v-if="galleryForm.processing">
                                 <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
@@ -905,7 +1170,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                         </button>
 
                         <!-- Success -->
-                        <div v-if="gallerySuccess" class="mt-4 text-olivo animate-fade-in bg-olivo/10 rounded-xl py-3 px-4 inline-block">
+                        <div v-if="gallerySuccess" class="mt-4 text-secondary animate-fade-in bg-secondary/10 rounded-xl py-3 px-4 inline-block">
                             ✅ ¡Foto subida con éxito! Se mostrará al ser aprobada.
                         </div>
                     </div>
@@ -916,17 +1181,17 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
                     <div
                         v-for="photo in galleryPhotos" :key="photo.id"
                         @click="openLightbox('/storage/' + photo.image_path)"
-                        class="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-arena"
+                        class="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-niebla"
                     >
                         <img :src="'/storage/' + photo.image_path" alt="Foto de boda" class="w-full h-full object-contain" />
-                        <div class="absolute inset-0 bg-cuero/0 group-hover:bg-cuero/20 transition-all duration-300 flex items-end p-3">
+                        <div class="absolute inset-0 bg-tinta/0 group-hover:bg-tinta/20 transition-all duration-300 flex items-end p-3">
                             <span v-if="photo.uploader_name" class="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300">Por: {{ photo.uploader_name }}</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Empty state before wedding -->
-                <div v-else class="text-center text-cuero/40 py-10">
+                <div v-else class="text-center text-tinta/40 py-10">
                     <svg class="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     <p class="font-slab">La galería se activará el día del evento</p>
                     <p class="text-sm mt-1">¡Vuelve para compartir tus momentos favoritos!</p>
@@ -939,7 +1204,7 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
             <div
                 v-if="lightboxImage"
                 @click="closeLightbox"
-                class="fixed inset-0 z-[100] bg-cuero/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+                class="fixed inset-0 z-[100] bg-tinta/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
             >
                 <button @click="closeLightbox" class="absolute top-6 right-6 text-white/60 hover:text-white transition-colors">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -949,9 +1214,9 @@ const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20
         </Teleport>
 
         <!-- ════════════════ FOOTER ════════════════ -->
-        <footer class="bg-cuero text-white/70 py-12 px-4">
+        <footer class="bg-tinta text-white/70 py-12 px-4">
             <div class="max-w-5xl mx-auto text-center">
-                <p class="font-script text-4xl text-dorado mb-4">Gracias</p>
+                <p class="font-script text-4xl text-primary mb-4">Gracias</p>
                 <p class="text-white/50 text-sm">Con amor, los novios</p>
                 <div class="flex items-center justify-center gap-3 mt-6">
                     <div class="h-px w-8 bg-white/20"></div>

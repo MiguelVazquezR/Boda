@@ -53,6 +53,7 @@ class WeddingSetting extends Model
         'dress_code_men_other',
         'dress_code_men_other_desc',
         'rsvp_deadline',
+        'canva_url',
     ];
 
     /**
@@ -87,6 +88,19 @@ class WeddingSetting extends Model
     }
 
     /**
+     * Serializa las fechas conservando la zona horaria del lugar del evento
+     * (America/Mexico_City).
+     *
+     * Eloquent convierte por defecto a UTC ("...Z"), lo que hacía que la hora de la
+     * ceremonia / celebración se mostrara desfasada en la invitación. Con este formato
+     * se envía "2026-11-14T20:50:00-06:00", es decir la hora tal como se configuró.
+     */
+    protected function serializeDate(\DateTimeInterface $date): string
+    {
+        return $date->format('Y-m-d\TH:i:sP');
+    }
+
+    /**
      * Singleton: siempre devuelve la primera (y única) fila, creándola con defaults si no existe.
      */
     public static function current(): self
@@ -96,6 +110,23 @@ class WeddingSetting extends Model
             'venue_name' => 'Por definir',
             'venue_address' => 'Por definir',
         ]);
+    }
+
+    /**
+     * URL del sitio de Canva con la invitación animada (música y transiciones).
+     * Si no se configuró desde el panel, se usa el valor por defecto de config/wedding.php.
+     */
+    public function invitationArtworkUrl(): string
+    {
+        return (string) ($this->canva_url ?: config('wedding.canva_url'));
+    }
+
+    /**
+     * Nombres de los novios tal como se muestran en la invitación.
+     */
+    public static function coupleNames(): string
+    {
+        return (string) config('wedding.couple_names');
     }
 
     /**

@@ -19,14 +19,14 @@ const { text: relativeTimeText } = useRelativeTime(respondedAt);
         <div class="flex flex-col items-center">
             <div :class="[
                 'w-3 h-3 rounded-full flex-shrink-0 mt-1.5',
-                isConfirmed ? 'bg-olivo' : 'bg-red-500',
+                isConfirmed ? 'bg-secondary' : 'bg-red-500',
             ]" />
-            <div class="w-px h-full bg-cuero/10 mt-1" />
+            <div class="w-px h-full bg-tinta/10 mt-1" />
         </div>
 
         <!-- Content -->
         <div class="flex-1 min-w-0 pb-1">
-            <p class="text-sm text-cuero">
+            <p class="text-sm text-tinta">
                 <span class="font-semibold">{{ guest.full_name }}</span>
                 <template v-if="isConfirmed">
                     confirmó su asistencia
@@ -35,10 +35,10 @@ const { text: relativeTimeText } = useRelativeTime(respondedAt);
                     no podrá asistir
                 </template>
             </p>
-            <p v-if="isConfirmed && guest.rsvp_message" class="text-xs text-cuero/40 italic mt-0.5 line-clamp-1">
+            <p v-if="isConfirmed && guest.rsvp_message" class="text-xs text-tinta/40 italic mt-0.5 line-clamp-1">
                 "{{ guest.rsvp_message }}"
             </p>
-            <p class="text-xs text-cuero/40 mt-0.5">{{ relativeTimeText }}</p>
+            <p class="text-xs text-tinta/40 mt-0.5">{{ relativeTimeText }}</p>
         </div>
 
         <!-- Status icon -->
@@ -46,7 +46,7 @@ const { text: relativeTimeText } = useRelativeTime(respondedAt);
             :is="isConfirmed ? CheckCircleIcon : XCircleIcon"
             :class="[
                 'w-4 h-4 flex-shrink-0 mt-1',
-                isConfirmed ? 'text-olivo' : 'text-red-400',
+                isConfirmed ? 'text-secondary' : 'text-red-400',
             ]"
         />
     </div>

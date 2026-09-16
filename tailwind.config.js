@@ -15,30 +15,34 @@ export default {
     theme: {
         extend: {
             colors: {
-                arena: {
-                    DEFAULT: '#FAF5EE',
-                    light: '#FDFBF7',
-                    dark: '#EDE0D0',
+                // Fondo base del sitio: azul muy tenue (contrasta con el primario y el secundario)
+                niebla: {
+                    DEFAULT: '#F4F8FD',
+                    light: '#FFFFFF',
+                    dark: '#E3EDF8',
                 },
-                cuero: {
-                    DEFAULT: '#4A3525',
-                    light: '#6B5340',
-                    dark: '#3A2A1D',
+                // Tinta: azul intenso para textos y superficies oscuras
+                tinta: {
+                    DEFAULT: '#123B5E',
+                    light: '#2F6389',
+                    dark: '#0B2A45',
                 },
-                olivo: {
-                    DEFAULT: '#606C38',
-                    light: '#7A8A4A',
-                    dark: '#4F5D2F',
+                // Color primario de la marca
+                primary: {
+                    DEFAULT: '#58B4FF',
+                    light: '#8CCBFF',
+                    dark: '#2E96E8',
+                },
+                // Color secundario de la marca
+                secondary: {
+                    DEFAULT: '#F7A79E',
+                    light: '#FBC7C0',
+                    dark: '#E8827A',
                 },
                 mezclilla: {
                     DEFAULT: '#1F3A52',
                     light: '#2C5170',
                     dark: '#152738',
-                },
-                dorado: {
-                    DEFAULT: '#C5A059',
-                    light: '#D4B878',
-                    dark: '#A8883D',
                 },
             },
             fontFamily: {

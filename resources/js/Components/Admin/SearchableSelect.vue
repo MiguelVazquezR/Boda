@@ -92,30 +92,30 @@ onBeforeUnmount(() => document.removeEventListener('click', onOutsideClick));
             @click="toggle"
             class="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border bg-white text-sm text-left transition-colors focus:outline-none focus:ring-2"
             :class="[
-                open ? 'border-dorado ring-dorado/20' : 'border-cuero/20 hover:border-cuero/30',
+                open ? 'border-primary ring-primary/20' : 'border-tinta/20 hover:border-tinta/30',
                 disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
             ]"
         >
-            <span class="truncate" :class="selected ? 'text-cuero' : 'text-cuero/30'">
+            <span class="truncate" :class="selected ? 'text-tinta' : 'text-tinta/30'">
                 {{ selected ? selected.label : placeholder }}
             </span>
-            <ChevronDownIcon class="w-4 h-4 text-cuero/40 flex-shrink-0 transition-transform" :class="{ 'rotate-180': open }" />
+            <ChevronDownIcon class="w-4 h-4 text-tinta/40 flex-shrink-0 transition-transform" :class="{ 'rotate-180': open }" />
         </button>
 
         <!-- Dropdown -->
         <div
             v-if="open"
-            class="absolute z-30 mt-1 w-full bg-white rounded-xl border border-cuero/15 shadow-lg overflow-hidden"
+            class="absolute z-30 mt-1 w-full bg-white rounded-xl border border-tinta/15 shadow-lg overflow-hidden"
         >
             <!-- Buscador -->
-            <div class="relative border-b border-cuero/10">
-                <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cuero/30" />
+            <div class="relative border-b border-tinta/10">
+                <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-tinta/30" />
                 <input
                     ref="inputRef"
                     v-model="query"
                     type="text"
                     placeholder="Buscar..."
-                    class="w-full pl-9 pr-3 py-2.5 text-sm text-cuero placeholder-cuero/30 bg-arena/30 focus:outline-none"
+                    class="w-full pl-9 pr-3 py-2.5 text-sm text-tinta placeholder-tinta/30 bg-niebla/30 focus:outline-none"
                     @keydown="onKeydown"
                     @focus="openList"
                 />
@@ -129,12 +129,12 @@ onBeforeUnmount(() => document.removeEventListener('click', onOutsideClick));
                     @click="select(option)"
                     @mouseenter="highlight = index"
                     class="px-3.5 py-2 text-sm cursor-pointer flex items-center justify-between gap-2 transition-colors"
-                    :class="index === highlight ? 'bg-dorado/10 text-cuero' : 'text-cuero/70 hover:bg-arena'"
+                    :class="index === highlight ? 'bg-primary/10 text-tinta' : 'text-tinta/70 hover:bg-niebla'"
                 >
                     <span class="truncate">{{ option.label }}</span>
-                    <CheckIcon v-if="option.value === modelValue" class="w-4 h-4 text-dorado flex-shrink-0" />
+                    <CheckIcon v-if="option.value === modelValue" class="w-4 h-4 text-primary flex-shrink-0" />
                 </li>
-                <li v-if="filtered.length === 0" class="px-3.5 py-3 text-sm text-cuero/40 italic text-center">
+                <li v-if="filtered.length === 0" class="px-3.5 py-3 text-sm text-tinta/40 italic text-center">
                     {{ emptyMessage }}
                 </li>
             </ul>
