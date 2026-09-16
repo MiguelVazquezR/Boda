@@ -10,3 +10,26 @@
 #p-license-host {
     display: none !important;
 }
+
+@layer components {
+    /*
+     * Papel del sobre de la apertura de la invitación (tela azul marino).
+     *
+     * El color y la textura salen de una captura de la tela (archivo de
+     * referencia temporal, ya eliminado): el azul marino base #17233D es el
+     * promedio RGB medido y public/img/sobre-textura.png es un recorte de
+     * 344x152 px con los píxeles reales de esa muestra, a escala 1:1 para
+     * conservar el tamaño de la trama (bandas de hilo cada ~9,5 px).
+     *
+     * El recorte es más grande que la cara más grande del sobre (336x136) para
+     * que la tela no se repita, y su alto es múltiplo del periodo de la trama
+     * (152 = 8 x 19 px = 16 periodos) por si alguna cara creciera. Las motas
+     * claras de la captura se sustituyeron por la media de sus vecinos.
+     */
+    .superficie-sobre {
+        @apply bg-sobre;
+        background-image: url('/img/sobre-textura.png');
+        background-repeat: repeat;
+        background-size: 344px 152px;
+    }
+}

@@ -44,6 +44,19 @@ export default {
                     light: '#2C5170',
                     dark: '#152738',
                 },
+                // Tela del sobre de la apertura de la invitación. Medida sobre
+                // una captura temporal de la tela (ya eliminada): base #17233D
+                // (promedio RGB exacto de la muestra) con los tonos de la trama
+                // a ±3σ (L 34,4 y desviación 5,6): claro #213358 y oscuro
+                // #0C1321. `deep` es el tono de sombra con el que se oscurecen
+                // las solapas del sobre. La textura va en `.superficie-sobre`
+                // (resources/css/app.css).
+                sobre: {
+                    DEFAULT: '#17233D',
+                    light: '#213358',
+                    dark: '#0C1321',
+                    deep: '#070E24',
+                },
             },
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
