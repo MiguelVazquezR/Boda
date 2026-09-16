@@ -74,7 +74,7 @@ function onTouchEnd(e) {
         <button
             v-if="items.length > 1"
             @click="prev"
-            class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 bg-white/80 hover:bg-white text-cuero/60 hover:text-cuero rounded-full p-2 shadow-md shadow-cuero/10 border border-cuero/10 transition-colors"
+            class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 bg-white/80 hover:bg-white text-tinta/60 hover:text-tinta rounded-full p-2 shadow-md shadow-tinta/10 border border-tinta/10 transition-colors"
             aria-label="Anterior"
         >
             <ChevronLeftIcon class="w-5 h-5" />
@@ -82,7 +82,7 @@ function onTouchEnd(e) {
         <button
             v-if="items.length > 1"
             @click="next"
-            class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 bg-white/80 hover:bg-white text-cuero/60 hover:text-cuero rounded-full p-2 shadow-md shadow-cuero/10 border border-cuero/10 transition-colors"
+            class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 bg-white/80 hover:bg-white text-tinta/60 hover:text-tinta rounded-full p-2 shadow-md shadow-tinta/10 border border-tinta/10 transition-colors"
             aria-label="Siguiente"
         >
             <ChevronRightIcon class="w-5 h-5" />
@@ -98,7 +98,7 @@ function onTouchEnd(e) {
                 :key="idx"
                 @click="goTo(idx)"
                 class="w-2.5 h-2.5 rounded-full transition-colors"
-                :class="idx === currentIndex ? 'bg-dorado' : 'bg-cuero/20 hover:bg-cuero/40'"
+                :class="idx === currentIndex ? 'bg-primary' : 'bg-tinta/20 hover:bg-tinta/40'"
                 :aria-label="`Ir a ${item.label}`"
             />
         </div>

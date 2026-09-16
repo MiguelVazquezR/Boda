@@ -7,7 +7,10 @@ use App\Http\Requests\StoreGuestRequest;
 use App\Http\Requests\UpdateGuestRequest;
 use App\Models\Guest;
 use App\Models\GuestGroup;
+use App\Models\GuestTable;
+use App\Models\Invitation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 
 class GuestController extends Controller
@@ -20,12 +23,14 @@ class GuestController extends Controller
      */
     public function index(Request $request)
     {
-        $guests = Guest::with('group')
+        $guests = Guest::with(['group', 'invitation:id,display_name,token'])
             ->orderBy('full_name')
             ->get();
 
         return Inertia::render('Admin/Guests/Index', [
             'guests' => $guests,
+            // Invitaciones digitales (parejas o personas solas) y sus links
+            'invitations' => $this->invitations(),
             'filters' => $request->only(['status', 'search']),
             'statusCounts' => [
                 'pending' => Guest::byStatus('pending')->count(),
@@ -62,7 +67,9 @@ class GuestController extends Controller
      */
     public function store(StoreGuestRequest $request)
     {
-        Guest::create($request->validated());
+        $guest = Guest::create($request->validated());
+
+        GuestTable::ensureExists($guest->table_group);
 
         return back()->with('success', 'Invitado agregado correctamente.');
     }
@@ -73,6 +80,8 @@ class GuestController extends Controller
     public function update(UpdateGuestRequest $request, Guest $guest)
     {
         $guest->update($request->validated());
+
+        GuestTable::ensureExists($guest->table_group);
 
         return back()->with('success', 'Invitado actualizado correctamente.');
     }
@@ -155,6 +164,7 @@ class GuestController extends Controller
         $created = 0;
         $errors = 0;
         $groupsCreated = 0;
+        $tablesUsed = []; // nombres de mesa mencionados en el CSV
         $skipped = [];
         $rowNumber = 1; // la fila 1 son los encabezados
 
@@ -192,6 +202,8 @@ class GuestController extends Controller
                 continue;
             }
 
+            $tableGroup = $this->cleanValue($data['table_group'] ?? null);
+
             Guest::create([
                 'first_name' => $firstName,
                 'last_name' => $lastName !== '' ? $lastName : null,
@@ -202,13 +214,22 @@ class GuestController extends Controller
                 'origin' => $this->normalizeOrigin($data['origin'] ?? null),
                 'state' => $this->cleanValue($data['state'] ?? null),
                 'city' => $this->cleanValue($data['city'] ?? null),
-                'table_group' => $this->cleanValue($data['table_group'] ?? null),
+                'table_group' => $tableGroup,
             ]);
+
+            // Las mesas mencionadas en el CSV quedan registradas para poder gestionarlas.
+            if ($tableGroup !== null) {
+                $tablesUsed[$tableGroup] = true;
+            }
 
             $created++;
         }
 
         fclose($handle);
+
+        foreach (array_keys($tablesUsed) as $tableName) {
+            GuestTable::ensureExists($tableName);
+        }
 
         $message = "Importación completada: {$created} invitado(s) creado(s).";
         if ($groupsCreated > 0) {
@@ -444,5 +465,30 @@ class GuestController extends Controller
         $groupsCreated++;
 
         return $group->id;
+    }
+
+    /**
+     * Invitaciones digitales con sus miembros, links y estado de confirmación.
+     * Se envían a la vista de invitados para gestionarlas desde «Parejas / Links».
+     */
+    private function invitations(): Collection
+    {
+        return Invitation::with('members:id,first_name,full_name,invitation_id,rsvp_status')
+            ->orderBy('display_name')
+            ->get()
+            ->map(fn (Invitation $invitation) => [
+                'id' => $invitation->id,
+                'token' => $invitation->token,
+                'display_name' => $invitation->display_name,
+                'public_url' => $invitation->publicUrl(),
+                'rsvp_url' => $invitation->rsvpUrl(),
+                'whatsapp_url' => $invitation->whatsappUrl(),
+                'pending_count' => $invitation->members->where('rsvp_status', 'pending')->count(),
+                'members' => $invitation->members->map(fn (Guest $guest) => [
+                    'id' => $guest->id,
+                    'full_name' => $guest->full_name,
+                ])->values(),
+            ])
+            ->values();
     }
 }

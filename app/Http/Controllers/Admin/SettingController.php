@@ -15,8 +15,13 @@ class SettingController extends Controller
      */
     public function edit()
     {
+        $settings = WeddingSetting::current();
+
         return Inertia::render('Admin/Settings/Edit', [
-            'settings' => WeddingSetting::current(),
+            'settings' => $settings,
+            // URL efectiva del sitio de Canva (la de la BD o la de config/wedding.php),
+            // para que el campo del panel muestre siempre el link que está activo.
+            'canvaUrl' => $settings->invitationArtworkUrl(),
         ]);
     }
 

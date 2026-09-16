@@ -8,9 +8,9 @@ const props = defineProps({
 </script>
 
 <template>
-    <div class="bg-arena-dark/50 rounded-xl overflow-hidden flex flex-col h-full">
+    <div class="bg-niebla-dark/50 rounded-xl overflow-hidden flex flex-col h-full">
         <!-- Image or fallback icon -->
-        <div class="aspect-square relative flex items-center justify-center bg-arena-dark/30">
+        <div class="aspect-square relative flex items-center justify-center bg-niebla-dark/30">
             <img
                 v-if="imageUrl"
                 :src="imageUrl"
@@ -26,10 +26,10 @@ const props = defineProps({
         </div>
         <!-- Label + Description -->
         <div class="p-3 text-center flex-1 flex flex-col justify-center">
-            <span class="font-medium text-cuero/80 text-sm">{{ label }}</span>
+            <span class="font-medium text-tinta/80 text-sm">{{ label }}</span>
             <p
                 v-if="description"
-                class="text-xs text-cuero/50 mt-1"
+                class="text-xs text-tinta/50 mt-1"
             >{{ description }}</p>
         </div>
     </div>

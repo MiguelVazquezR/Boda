@@ -17,4 +17,13 @@ export default defineConfig({
             },
         }),
     ],
+    // comentar los siguientes bloques si no se usa el dominio boda.test
+    server: {
+        detectTls: 'boda.test',
+        // 💡 Añade este bloque hmr para corregir el WebSocket de Vite:
+        hmr: {
+            host: 'boda.test',
+            protocol: 'wss',
+        },
+    },
 });

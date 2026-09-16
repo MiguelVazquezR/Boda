@@ -64,6 +64,7 @@ class UpdateWeddingSettingRequest extends FormRequest
 
             // General
             'rsvp_deadline' => ['nullable', 'date'],
+            'canva_url' => ['nullable', 'url', 'max:500'],
         ];
     }
 

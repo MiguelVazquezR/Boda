@@ -104,14 +104,14 @@ function doDelete() {
 <template>
     <AppLayout title="Tiempos (Itinerario)">
         <template #header>
-            <h2 class="font-slab text-xl text-cuero leading-tight">Tiempos (Itinerario)</h2>
+            <h2 class="font-slab text-xl text-tinta leading-tight">Tiempos (Itinerario)</h2>
         </template>
 
         <div class="py-6">
             <div class="max-w-screen-2xl mx-auto px-2 sm:px-3 lg:px-4">
                 <div class="flex items-center justify-between gap-4 mb-8">
                     <div>
-                        <p class="text-sm text-cuero/60">
+                        <p class="text-sm text-tinta/60">
                             Administra el itinerario que se muestra en la landing: hora, qué se hará y su imagen.
                         </p>
                     </div>
@@ -126,18 +126,18 @@ function doDelete() {
                     <div
                         v-for="(item, index) in items"
                         :key="item.id"
-                        class="bg-white rounded-2xl border border-cuero/10 shadow-sm overflow-hidden"
+                        class="bg-white rounded-2xl border border-tinta/10 shadow-sm overflow-hidden"
                     >
                         <div class="flex flex-col sm:flex-row items-stretch">
                             <!-- Imagen -->
-                            <div class="sm:w-52 shrink-0 bg-arena/50">
+                            <div class="sm:w-52 shrink-0 bg-niebla/50">
                                 <img
                                     v-if="item.image_path"
                                     :src="'/storage/' + item.image_path"
                                     :alt="item.title"
                                     class="w-full h-40 sm:h-full object-cover"
                                 />
-                                <div v-else class="w-full h-40 sm:h-full flex items-center justify-center text-cuero/30">
+                                <div v-else class="w-full h-40 sm:h-full flex items-center justify-center text-tinta/30">
                                     <PhotoIcon class="w-10 h-10" />
                                 </div>
                             </div>
@@ -146,19 +146,19 @@ function doDelete() {
                             <div class="flex-1 px-5 py-4 flex items-start justify-between gap-4 min-w-0">
                                 <div class="min-w-0">
                                     <div class="flex items-center gap-2 mb-1">
-                                        <span v-if="item.time" class="inline-flex items-center gap-1 text-dorado font-slab font-bold">
+                                        <span v-if="item.time" class="inline-flex items-center gap-1 text-primary font-slab font-bold">
                                             <ClockIcon class="w-4 h-4" />
                                             {{ item.time }}
                                         </span>
                                         <span
                                             v-if="!item.is_active"
-                                            class="text-xs bg-cuero/10 text-cuero/50 px-2 py-0.5 rounded-full font-medium"
+                                            class="text-xs bg-tinta/10 text-tinta/50 px-2 py-0.5 rounded-full font-medium"
                                         >
                                             Oculto
                                         </span>
                                     </div>
-                                    <h3 class="font-slab text-lg text-cuero">{{ item.title }}</h3>
-                                    <p v-if="item.description" class="text-sm text-cuero/60 mt-1 leading-relaxed">
+                                    <h3 class="font-slab text-lg text-tinta">{{ item.title }}</h3>
+                                    <p v-if="item.description" class="text-sm text-tinta/60 mt-1 leading-relaxed">
                                         {{ item.description }}
                                     </p>
                                 </div>
@@ -169,7 +169,7 @@ function doDelete() {
                                         <button
                                             @click="move(item, 'up')"
                                             :disabled="index === 0"
-                                            class="p-1.5 text-cuero/40 hover:text-cuero rounded-lg hover:bg-arena disabled:opacity-30 disabled:cursor-not-allowed"
+                                            class="p-1.5 text-tinta/40 hover:text-tinta rounded-lg hover:bg-niebla disabled:opacity-30 disabled:cursor-not-allowed"
                                             title="Subir"
                                         >
                                             <ArrowUpIcon class="w-4 h-4" />
@@ -177,19 +177,19 @@ function doDelete() {
                                         <button
                                             @click="move(item, 'down')"
                                             :disabled="index === items.length - 1"
-                                            class="p-1.5 text-cuero/40 hover:text-cuero rounded-lg hover:bg-arena disabled:opacity-30 disabled:cursor-not-allowed"
+                                            class="p-1.5 text-tinta/40 hover:text-tinta rounded-lg hover:bg-niebla disabled:opacity-30 disabled:cursor-not-allowed"
                                             title="Bajar"
                                         >
                                             <ArrowDownIcon class="w-4 h-4" />
                                         </button>
                                     </div>
                                     <div class="flex items-center gap-1">
-                                        <button @click="openEdit(item)" class="p-2 text-cuero/30 hover:text-mezclilla transition-colors rounded-lg hover:bg-mezclilla/5" title="Editar">
+                                        <button @click="openEdit(item)" class="p-2 text-tinta/30 hover:text-primary transition-colors rounded-lg hover:bg-primary/5" title="Editar">
                                             <PencilIcon class="w-4 h-4" />
                                         </button>
                                         <ConfirmDeleteModal :message="`¿Eliminar «${item.title}» del itinerario?`" @confirm="doDelete">
                                             <template #default="{ open: openDel }">
-                                                <button @click="confirmDelete(item); openDel()" class="p-2 text-cuero/30 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50" title="Eliminar">
+                                                <button @click="confirmDelete(item); openDel()" class="p-2 text-tinta/30 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50" title="Eliminar">
                                                     <TrashIcon class="w-4 h-4" />
                                                 </button>
                                             </template>
@@ -234,7 +234,7 @@ function doDelete() {
                                     v-model="form.description"
                                     rows="3"
                                     placeholder="¿Qué se hará en este momento?"
-                                    class="mt-1 w-full rounded-xl border border-cuero/20 bg-white text-sm text-cuero px-3.5 py-2.5 placeholder-cuero/30 focus:border-dorado focus:ring-dorado/20 outline-none resize-none"
+                                    class="mt-1 w-full rounded-xl border border-tinta/20 bg-white text-sm text-tinta px-3.5 py-2.5 placeholder-tinta/30 focus:border-primary focus:ring-primary/20 outline-none resize-none"
                                 ></textarea>
                                 <InputError :message="form.errors.description" class="mt-1" />
                             </div>
@@ -242,22 +242,22 @@ function doDelete() {
                             <!-- Imagen -->
                             <div>
                                 <InputLabel value="Imagen" />
-                                <div class="mt-1 border-2 border-dashed border-cuero/20 rounded-xl p-4 text-center">
+                                <div class="mt-1 border-2 border-dashed border-tinta/20 rounded-xl p-4 text-center">
                                     <img
                                         v-if="previewUrl"
                                         :src="previewUrl"
                                         alt="Vista previa"
                                         class="w-full h-40 object-cover rounded-lg mb-3"
                                     />
-                                    <div v-else class="flex flex-col items-center text-cuero/40 py-2">
+                                    <div v-else class="flex flex-col items-center text-tinta/40 py-2">
                                         <PhotoIcon class="w-8 h-8 mb-1" />
                                         <span class="text-xs">Sin imagen</span>
                                     </div>
-                                    <label class="cursor-pointer inline-block mt-1 text-mezclilla hover:text-mezclilla-light text-sm font-medium">
+                                    <label class="cursor-pointer inline-block mt-1 text-primary hover:text-primary-dark text-sm font-medium">
                                         {{ previewUrl ? 'Cambiar imagen' : 'Subir imagen' }}
                                         <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="onImageSelect" />
                                     </label>
-                                    <p v-if="editingItem?.image_path" class="text-xs text-cuero/40 mt-1">
+                                    <p v-if="editingItem?.image_path" class="text-xs text-tinta/40 mt-1">
                                         Deja el campo vacío para conservar la imagen actual.
                                     </p>
                                 </div>
@@ -265,8 +265,8 @@ function doDelete() {
                             </div>
 
                             <!-- Activo -->
-                            <label class="flex items-center gap-2 text-sm text-cuero cursor-pointer">
-                                <input type="checkbox" v-model="form.is_active" class="rounded border-cuero/20 text-dorado focus:ring-dorado/20" />
+                            <label class="flex items-center gap-2 text-sm text-tinta cursor-pointer">
+                                <input type="checkbox" v-model="form.is_active" class="rounded border-tinta/20 text-primary focus:ring-primary/20" />
                                 Mostrar en la landing
                             </label>
                         </div>

@@ -96,7 +96,7 @@ function doDelete() {
         <template #content>
             <div class="space-y-5">
                 <!-- Form crear / editar -->
-                <div class="bg-arena/50 rounded-xl p-4">
+                <div class="bg-niebla/50 rounded-xl p-4">
                     <InputLabel :value="editingId ? 'Editar grupo' : 'Nuevo grupo'" />
                     <div class="flex items-start gap-2 mt-1">
                         <div class="flex-1">
@@ -121,7 +121,7 @@ function doDelete() {
                         v-if="editingId"
                         type="button"
                         @click="openCreate"
-                        class="text-xs text-cuero/50 hover:text-cuero mt-2 transition-colors"
+                        class="text-xs text-tinta/50 hover:text-tinta mt-2 transition-colors"
                     >
                         Cancelar edición
                     </button>
@@ -132,28 +132,28 @@ function doDelete() {
                     <div
                         v-for="group in groups"
                         :key="group.id"
-                        class="flex items-center justify-between gap-3 bg-white rounded-xl border border-cuero/10 px-4 py-3"
+                        class="flex items-center justify-between gap-3 bg-white rounded-xl border border-tinta/10 px-4 py-3"
                     >
                         <div class="flex items-center gap-3 min-w-0">
-                            <div class="w-8 h-8 bg-dorado/10 rounded-full flex items-center justify-center flex-shrink-0">
-                                <TagIcon class="w-4 h-4 text-dorado" />
+                            <div class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                                <TagIcon class="w-4 h-4 text-primary" />
                             </div>
                             <div class="min-w-0">
-                                <p class="font-medium text-cuero truncate text-sm">{{ group.name }}</p>
-                                <p class="text-xs text-cuero/50">{{ group.guests_count ?? 0 }} invitado(s)</p>
+                                <p class="font-medium text-tinta truncate text-sm">{{ group.name }}</p>
+                                <p class="text-xs text-tinta/50">{{ group.guests_count ?? 0 }} invitado(s)</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-1 flex-shrink-0">
                             <button
                                 @click="openEdit(group)"
-                                class="p-2 text-cuero/30 hover:text-mezclilla transition-colors rounded-lg hover:bg-mezclilla/5"
+                                class="p-2 text-tinta/30 hover:text-primary transition-colors rounded-lg hover:bg-primary/5"
                                 title="Editar"
                             >
                                 <PencilIcon class="w-4 h-4" />
                             </button>
                             <button
                                 @click="confirmDelete(group)"
-                                class="p-2 text-cuero/30 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
+                                class="p-2 text-tinta/30 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
                                 title="Eliminar"
                             >
                                 <TrashIcon class="w-4 h-4" />
@@ -161,7 +161,7 @@ function doDelete() {
                         </div>
                     </div>
                 </div>
-                <p v-else class="text-sm text-cuero/50 italic text-center py-4">
+                <p v-else class="text-sm text-tinta/50 italic text-center py-4">
                     Aún no hay grupos. Crea el primero arriba.
                 </p>
 

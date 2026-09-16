@@ -22,7 +22,7 @@ function confirm() { emit('confirm'); }
     <ConfirmationModal :show="open" @close="open = false">
         <template #title>{{ title }}</template>
         <template #content>
-            <p class="text-cuero/70">{{ message }}</p>
+            <p class="text-tinta/70">{{ message }}</p>
         </template>
         <template #footer>
             <SecondaryButton @click="open = false" :disabled="processing">Cancelar</SecondaryButton>

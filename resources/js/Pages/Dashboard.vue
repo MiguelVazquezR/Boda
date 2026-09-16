@@ -72,15 +72,15 @@ onUnmounted(() => {
 <template>
     <AppLayout title="Dashboard">
         <template #header>
-            <h2 class="font-slab text-xl text-cuero leading-tight">Dashboard</h2>
+            <h2 class="font-slab text-xl text-tinta leading-tight">Dashboard</h2>
         </template>
 
         <div class="py-6">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-                <div class="relative bg-gradient-to-r from-cuero to-cuero-light rounded-2xl p-6 md:p-10 overflow-hidden">
+                <div class="relative bg-gradient-to-r from-primary to-primary-dark rounded-2xl p-6 md:p-10 overflow-hidden">
                     <div class="absolute inset-0 opacity-10">
-                        <div class="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-dorado/50" />
-                        <div class="absolute -bottom-8 -left-8 w-32 h-32 rounded-full bg-dorado/30" />
+                        <div class="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-primary/50" />
+                        <div class="absolute -bottom-8 -left-8 w-32 h-32 rounded-full bg-primary/30" />
                     </div>
                     <div class="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div>
@@ -88,7 +88,7 @@ onUnmounted(() => {
                             <p class="text-white font-slab text-2xl md:text-3xl">¡Todo listo para el gran día!</p>
                         </div>
                         <div class="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl px-5 py-3">
-                            <CalendarDaysIcon class="w-5 h-5 text-dorado" />
+                            <CalendarDaysIcon class="w-5 h-5 text-primary" />
                             <div>
                                 <p class="text-white/60 text-xs">Faltan</p>
                                 <p class="text-white font-slab text-3xl font-bold leading-none">{{ countdownDays }}</p>
@@ -99,10 +99,10 @@ onUnmounted(() => {
                 </div>
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 -mt-12 relative z-20 px-2">
-                    <KpiCard :icon="UserGroupIcon" label="Total de invitados" :value="kpis?.total ?? 0" accent-color="cuero" />
-                    <KpiCard :icon="CheckCircleIcon" label="Confirmaron" :value="kpis?.confirmed ?? 0" accent-color="olivo" :percentage="pct(kpis?.confirmed)" />
+                    <KpiCard :icon="UserGroupIcon" label="Total de invitados" :value="kpis?.total ?? 0" accent-color="tinta" />
+                    <KpiCard :icon="CheckCircleIcon" label="Confirmaron" :value="kpis?.confirmed ?? 0" accent-color="secondary" :percentage="pct(kpis?.confirmed)" />
                     <KpiCard :icon="XCircleIcon" label="No asistirán" :value="kpis?.declined ?? 0" accent-color="red" :percentage="pct(kpis?.declined)" />
-                    <KpiCard :icon="ClockIcon" label="Pendientes" :value="kpis?.pending ?? 0" accent-color="dorado" :percentage="pct(kpis?.pending)" />
+                    <KpiCard :icon="ClockIcon" label="Pendientes" :value="kpis?.pending ?? 0" accent-color="primary" :percentage="pct(kpis?.pending)" />
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -110,25 +110,25 @@ onUnmounted(() => {
                         <ActivityFeed :activities="recentActivity" />
                     </div>
                     <div class="space-y-6">
-                        <div class="bg-white rounded-2xl shadow-sm border border-cuero/10 overflow-hidden">
-                            <div class="px-5 py-4 border-b border-cuero/5">
-                                <h2 class="font-slab text-lg text-cuero">Accesos Rápidos</h2>
+                        <div class="bg-white rounded-2xl shadow-sm border border-tinta/10 overflow-hidden">
+                            <div class="px-5 py-4 border-b border-tinta/5">
+                                <h2 class="font-slab text-lg text-tinta">Accesos Rápidos</h2>
                             </div>
                             <div class="p-3 space-y-1">
                                 <Link v-for="link in quickLinks" :key="link.label" :href="route(link.route)"
-                                    class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-cuero/70 hover:text-cuero hover:bg-arena transition-colors group">
-                                    <component :is="link.icon" class="w-5 h-5 text-cuero/40 group-hover:text-dorado transition-colors" />
+                                    class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-tinta/70 hover:text-tinta hover:bg-niebla transition-colors group">
+                                    <component :is="link.icon" class="w-5 h-5 text-tinta/40 group-hover:text-primary transition-colors" />
                                     <span class="flex-1">{{ link.label }}</span>
-                                    <span v-if="link.badge" class="bg-dorado text-white text-xs font-bold px-2 py-0.5 rounded-full">{{ link.badge }}</span>
-                                    <ArrowRightIcon class="w-4 h-4 text-cuero/20 group-hover:text-dorado transition-colors" />
+                                    <span v-if="link.badge" class="bg-primary text-white text-xs font-bold px-2 py-0.5 rounded-full">{{ link.badge }}</span>
+                                    <ArrowRightIcon class="w-4 h-4 text-tinta/20 group-hover:text-primary transition-colors" />
                                 </Link>
                             </div>
                         </div>
 
-                        <div v-if="rsvpDeadline" class="bg-gradient-to-br from-dorado/5 to-dorado/10 rounded-2xl border border-dorado/20 p-5">
-                            <p class="text-xs uppercase tracking-wider text-cuero/50 mb-1">Fecha límite RSVP</p>
-                            <p class="font-slab text-xl text-cuero">{{ rsvpDeadline }}</p>
-                            <p class="text-sm text-cuero/50 mt-2">Los invitados tienen hasta esta fecha para confirmar su asistencia.</p>
+                        <div v-if="rsvpDeadline" class="bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/20 p-5">
+                            <p class="text-xs uppercase tracking-wider text-tinta/50 mb-1">Fecha límite RSVP</p>
+                            <p class="font-slab text-xl text-tinta">{{ rsvpDeadline }}</p>
+                            <p class="text-sm text-tinta/50 mt-2">Los invitados tienen hasta esta fecha para confirmar su asistencia.</p>
                         </div>
                     </div>
                 </div>

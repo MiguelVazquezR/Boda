@@ -16,6 +16,7 @@ class Guest extends Model
         'age',
         'gender',
         'guest_group_id',
+        'invitation_id',
         'phone',
         'origin',
         'state',
@@ -58,6 +59,14 @@ class Guest extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(GuestGroup::class, 'guest_group_id');
+    }
+
+    /**
+     * Invitación digital a la que va dirigido el invitado (pareja o persona sola).
+     */
+    public function invitation(): BelongsTo
+    {
+        return $this->belongsTo(Invitation::class);
     }
 
     /**
