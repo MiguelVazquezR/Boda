@@ -183,7 +183,7 @@ class InvitationTest extends TestCase
 
         $invitation = Invitation::firstOrFail();
 
-        $this->assertSame('Ana & Luis', $invitation->display_name);
+        $this->assertSame('Ana Pérez & Luis Pérez', $invitation->display_name);
         $this->assertSame(10, strlen($invitation->token));
         $this->assertSame($invitation->id, $ana->fresh()->invitation_id);
         $this->assertSame($invitation->id, $luis->fresh()->invitation_id);
@@ -249,6 +249,42 @@ class InvitationTest extends TestCase
         $this->assertNotSame($oldToken, $newToken);
         $this->get("/i/{$oldToken}")->assertNotFound();
         $this->get("/i/{$newToken}")->assertOk();
+    }
+
+    public function test_marca_y_desmarca_la_invitacion_como_enviada(): void
+    {
+        $this->actingAs($this->adminUser(), 'sanctum');
+
+        $invitation = $this->invitation([$this->guest('Ana Pérez')], 'Ana Pérez');
+
+        $this->assertNull($invitation->sent_at);
+
+        $this->put(route('admin.invitations.sent', $invitation->id), ['sent' => true])
+            ->assertRedirect();
+
+        $this->assertNotNull($invitation->fresh()->sent_at);
+
+        $this->put(route('admin.invitations.sent', $invitation->id), ['sent' => false])
+            ->assertRedirect();
+
+        $this->assertNull($invitation->fresh()->sent_at);
+    }
+
+    public function test_un_usuario_normal_no_puede_marcar_la_invitacion_como_enviada(): void
+    {
+        $regular = User::factory()->create([
+            'is_admin' => false,
+            'email_verified_at' => now(),
+        ]);
+
+        $invitation = $this->invitation([$this->guest('Ana Pérez')], 'Ana Pérez');
+
+        $this->actingAs($regular, 'sanctum');
+
+        $this->put(route('admin.invitations.sent', $invitation->id), ['sent' => true])
+            ->assertForbidden();
+
+        $this->assertNull($invitation->fresh()->sent_at);
     }
 
     public function test_eliminar_la_invitacion_conserva_a_los_invitados(): void

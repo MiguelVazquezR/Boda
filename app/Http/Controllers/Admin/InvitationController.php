@@ -9,6 +9,7 @@ use App\Models\Guest;
 use App\Models\Invitation;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -72,6 +73,23 @@ class InvitationController extends Controller
         $invitation->update(['token' => Invitation::generateToken()]);
 
         return back()->with('success', 'Se generó un link nuevo. El anterior ya no funciona.');
+    }
+
+    /**
+     * Marca (o desmarca) la invitación como ya enviada a los invitados.
+     * El panel la muestra en verde cuando está marcada como enviada.
+     */
+    public function markSent(Request $request, Invitation $invitation): RedirectResponse
+    {
+        $validated = $request->validate([
+            'sent' => ['required', 'boolean'],
+        ]);
+
+        $invitation->update([
+            'sent_at' => $validated['sent'] ? ($invitation->sent_at ?? now()) : null,
+        ]);
+
+        return back();
     }
 
     /**
