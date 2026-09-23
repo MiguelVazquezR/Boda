@@ -102,6 +102,7 @@ Route::middleware([
         Route::post('/invitaciones/individuales', [AdminInvitationController::class, 'storeSingle'])->name('invitations.single');
         Route::put('/invitaciones/{invitation:id}', [AdminInvitationController::class, 'update'])->name('invitations.update');
         Route::post('/invitaciones/{invitation:id}/link', [AdminInvitationController::class, 'regenerateToken'])->name('invitations.token');
+        Route::put('/invitaciones/{invitation:id}/enviada', [AdminInvitationController::class, 'markSent'])->name('invitations.sent');
         Route::delete('/invitaciones/{invitation:id}', [AdminInvitationController::class, 'destroy'])->name('invitations.destroy');
 
         // Mesas (gestión de mesas y asignación de invitados)

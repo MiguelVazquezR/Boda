@@ -17,7 +17,7 @@ import EmptyState from '@/Components/Admin/EmptyState.vue';
 import ConfirmDeleteModal from '@/Components/Admin/ConfirmDeleteModal.vue';
 import GuestDetailModal from './Partials/GuestDetailModal.vue';
 import InvitationsManagerModal from './Partials/InvitationsManagerModal.vue';
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon } from '@heroicons/vue/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon, CheckIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
     guests: Array,
@@ -41,7 +41,17 @@ const filters = ref({
     city: { value: null, matchMode: 'in' },
     age: { value: null, matchMode: 'equals' },
     table_group: { value: null, matchMode: 'equals' },
+    invitation_state: { value: null, matchMode: 'equals' },
 });
+
+// Cada invitado con el campo virtual `invitation_state` ('with' / 'without') que usa
+// el filtro de la columna "Invitación" para ver quiénes ya tienen link y quiénes faltan.
+const tableGuests = computed(() =>
+    props.guests.map((guest) => ({
+        ...guest,
+        invitation_state: guest.invitation ? 'with' : 'without',
+    })),
+);
 
 /**
  * Normaliza texto para buscar: minúsculas, sin acentos y sin caracteres especiales.
@@ -75,6 +85,7 @@ function clearFilters() {
         city: { value: null, matchMode: 'in' },
         age: { value: null, matchMode: 'equals' },
         table_group: { value: null, matchMode: 'equals' },
+        invitation_state: { value: null, matchMode: 'equals' },
     };
 }
 
@@ -93,6 +104,12 @@ const genderOptions = [
 const originOptions = [
     { label: 'Local', value: 'local' },
     { label: 'Foráneo', value: 'foraneo' },
+];
+
+// Columna "Invitación": quiénes ya tienen su link digital y a quiénes les falta.
+const invitationOptions = [
+    { label: 'Con invitación', value: 'with' },
+    { label: 'Sin invitación', value: 'without' },
 ];
 
 const groupOptions = computed(() => {
@@ -207,6 +224,44 @@ function closeInvitations() {
     invitationMemberIds.value = [];
     selectedGuests.value = [];
 }
+
+// ── Copiar link y marcar como enviada desde la columna «Invitación» ──
+const copiedInvitationId = ref(null);
+const invitationSentForm = useForm({ sent: false });
+
+/** Copia el link público de la invitación (con confirmación visual de 2s). */
+async function copyInvitationLink(invitation) {
+    try {
+        await navigator.clipboard.writeText(invitation.public_url);
+        copiedInvitationId.value = invitation.id;
+        setTimeout(() => {
+            if (copiedInvitationId.value === invitation.id) copiedInvitationId.value = null;
+        }, 2000);
+    } catch {
+        window.prompt('Copia el link de la invitación:', invitation.public_url);
+    }
+}
+
+/** Marca o desmarca la invitación como enviada sin salir de la tabla. */
+function toggleInvitationSent(invitation, checked) {
+    invitationSentForm.sent = checked;
+    invitationSentForm.put(route('admin.invitations.sent', invitation.id), {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
+/** Tooltip del check «enviada»: fecha en que se envió, si ya está marcada. */
+function sentTooltip(invitation) {
+    if (!invitation.sent_at) return 'Marcar como enviada';
+
+    const date = new Date(invitation.sent_at).toLocaleDateString('es-MX', {
+        day: 'numeric',
+        month: 'long',
+    });
+
+    return `Enviada el ${date}`;
+}
 </script>
 
 <template>
@@ -265,23 +320,18 @@ function closeInvitations() {
                         </div>
                     </div>
 
-                    <!-- Tabla con filtros por columna y paginación -->
+                    <!-- Tabla con filtros por columna (sin paginación: se muestran todos los invitados) -->
                     <div v-if="guests.length > 0" class="bg-white rounded-2xl border border-tinta/10 shadow-sm overflow-hidden">
                         <DataTable
                             v-model:filters="filters"
                             v-model:selection="selectedGuests"
-                            :value="guests"
+                            :value="tableGuests"
                             :globalFilterFields="['search_slug', 'full_name', 'phone', 'city', 'state', 'table_group', 'group.name']"
                             filterDisplay="row"
-                            paginator
-                            :rows="10"
-                            :rowsPerPageOptions="[10, 25, 50, 100]"
                             dataKey="id"
                             sortField="full_name"
                             :sortOrder="1"
                             stripedRows
-                            :paginatorTemplate="'FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport'"
-                            :currentPageReportTemplate="'Mostrando {first} a {last} de {totalRecords} invitados'"
                         >
                             <template #empty>
                                 <p class="py-6 text-center text-tinta/50 text-sm">
@@ -359,14 +409,57 @@ function closeInvitations() {
                                 </template>
                             </Column>
 
-                            <Column field="invitation.display_name" header="Invitación" :showFilterMenu="false" style="min-width: 180px">
+                            <Column field="invitation_state" header="Invitación" :showFilterMenu="false" style="min-width: 230px">
                                 <template #body="{ data }">
-                                    <span v-if="data.invitation"
-                                        class="inline-flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium">
-                                        <LinkIcon class="w-3.5 h-3.5" />
-                                        {{ data.invitation.display_name }}
-                                    </span>
+                                    <div v-if="data.invitation" class="flex items-center gap-1.5">
+                                        <span
+                                            class="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
+                                            :class="data.invitation.sent_at ? 'bg-green-100 text-green-700' : 'bg-primary/10 text-primary'"
+                                            :title="data.invitation.sent_at ? 'Invitación enviada' : 'Invitación creada, aún sin enviar'">
+                                            <CheckIcon v-if="data.invitation.sent_at" class="w-3.5 h-3.5" />
+                                            <LinkIcon v-else class="w-3.5 h-3.5" />
+                                            {{ data.invitation.display_name }}
+                                        </span>
+
+                                        <!-- Copiar el link de la invitación -->
+                                        <button
+                                            @click="copyInvitationLink(data.invitation)"
+                                            class="p-1.5 transition-colors rounded-lg"
+                                            :class="copiedInvitationId === data.invitation.id
+                                                ? 'text-secondary'
+                                                : 'text-tinta/30 hover:text-primary hover:bg-primary/5'"
+                                            :title="copiedInvitationId === data.invitation.id ? 'Link copiado' : 'Copiar link'"
+                                        >
+                                            <CheckIcon v-if="copiedInvitationId === data.invitation.id" class="w-4 h-4" />
+                                            <ClipboardDocumentIcon v-else class="w-4 h-4" />
+                                        </button>
+
+                                        <!-- Marcar como enviada -->
+                                        <label
+                                            class="inline-flex items-center cursor-pointer"
+                                            :title="sentTooltip(data.invitation)"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                class="w-4 h-4 rounded cursor-pointer text-green-600 focus:ring-green-500/40"
+                                                :checked="!!data.invitation.sent_at"
+                                                :disabled="invitationSentForm.processing"
+                                                @change="toggleInvitationSent(data.invitation, $event.target.checked)"
+                                            />
+                                        </label>
+                                    </div>
                                     <span v-else class="text-tinta/40 text-xs">—</span>
+                                </template>
+                                <template #filter>
+                                    <Select
+                                        v-model="filters['invitation_state'].value"
+                                        :options="invitationOptions"
+                                        optionLabel="label"
+                                        optionValue="value"
+                                        placeholder="Invitación"
+                                        showClear
+                                        class="!w-full"
+                                    />
                                 </template>
                             </Column>
 

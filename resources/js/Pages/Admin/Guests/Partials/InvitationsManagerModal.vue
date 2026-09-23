@@ -57,6 +57,8 @@ const copiedId = ref(null);
 
 const form = useForm({ display_name: '', members: [] });
 const actionForm = useForm({});
+// Check «enviada» de cada invitación creada (columna derecha de la lista)
+const sentForm = useForm({ sent: false });
 
 /** Invitación que se está editando (null = creando una nueva). */
 const editingInvitation = computed(
@@ -72,15 +74,35 @@ const memberOptions = computed(() => {
         .map((guest) => ({ label: guest.full_name, value: guest.id }));
 });
 
-/** Nombre sugerido a partir de los invitados elegidos ("Ana & Luis"). */
+/** Nombre sugerido a partir de los invitados elegidos, con su nombre completo ("Ana Pérez & Luis García"). */
 const suggestedName = computed(() => {
     const names = form.members
         .map((id) => props.guests.find((guest) => guest.id === id))
         .filter(Boolean)
-        .map((guest) => guest.first_name || guest.full_name);
+        .map((guest) => guest.full_name);
 
     return names.join(' & ');
 });
+
+// Último nombre escrito automáticamente en el campo «Nombre en la invitación».
+// Solo se reemplaza si el campo está vacío o conserva el valor automático, para
+// no pisar un nombre que se haya escrito a mano.
+const autoFilledName = ref('');
+
+watch(suggestedName, (name) => {
+    const current = form.display_name ?? '';
+
+    if (current === '' || current === autoFilledName.value) {
+        form.display_name = name;
+        autoFilledName.value = name;
+    }
+});
+
+/** Aplica el nombre sugerido al campo (y lo recuerda como valor automático). */
+function useSuggestedName() {
+    form.display_name = suggestedName.value;
+    autoFilledName.value = suggestedName.value;
+}
 
 /** Invitados que aún no tienen invitación (para el atajo de crear individuales). */
 const guestsWithoutInvitation = computed(() => props.guests.filter((guest) => !guest.invitation_id));
@@ -100,12 +122,16 @@ function openCreate(prefill = []) {
     editingId.value = null;
     form.reset();
     form.clearErrors();
+    // El nombre se vuelve a sugerir a partir de los invitados elegidos
+    autoFilledName.value = '';
     form.members = prefill.slice(0, 2);
 }
 
 function openEdit(invitation) {
     editingId.value = invitation.id;
     form.clearErrors();
+    // En edición se respeta el nombre guardado (el botón «Usar …» sigue disponible)
+    autoFilledName.value = '';
     form.display_name = invitation.display_name;
     form.members = invitation.members.map((member) => member.id);
 }
@@ -170,6 +196,32 @@ function createSingles() {
         onSuccess: refresh,
     });
 }
+
+/**
+ * Marca o desmarca la invitación como ya enviada a los invitados.
+ * Se conserva el estado del modal (preserveState) para que el check se
+ * actualice en el momento sin cerrarlo.
+ */
+function toggleSent(invitation, checked) {
+    sentForm.sent = checked;
+    sentForm.put(route('admin.invitations.sent', invitation.id), {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: refresh,
+    });
+}
+
+/** Tooltip del check: fecha en que se envió si ya está marcada. */
+function sentTooltip(invitation) {
+    if (!invitation.sent_at) return 'Marcar como ya enviada';
+
+    const date = new Date(invitation.sent_at).toLocaleDateString('es-MX', {
+        day: 'numeric',
+        month: 'long',
+    });
+
+    return `Enviada el ${date}`;
+}
 </script>
 
 <template>
@@ -232,14 +284,14 @@ function createSingles() {
                             <TextInput
                                 v-model="form.display_name"
                                 class="w-full"
-                                :placeholder="suggestedName || 'Ej. Ana & Luis'"
+                                :placeholder="suggestedName || 'Ej. Ana Pérez & Luis García'"
                                 @keyup.enter="save"
                             />
                             <InputError :message="form.errors.display_name" class="mt-1" />
                             <button
                                 v-if="suggestedName && form.display_name !== suggestedName"
                                 type="button"
-                                @click="form.display_name = suggestedName"
+                                @click="useSuggestedName"
                                 class="text-xs text-primary hover:text-primary-dark mt-1 transition-colors"
                             >
                                 Usar «{{ suggestedName }}»
@@ -289,7 +341,8 @@ function createSingles() {
                     <div
                         v-for="invitation in invitations"
                         :key="invitation.id"
-                        class="bg-white rounded-xl border border-tinta/10 px-4 py-3 space-y-2"
+                        class="bg-white rounded-xl border px-4 py-3 space-y-2 transition-colors"
+                        :class="invitation.sent_at ? 'border-green-200' : 'border-tinta/10'"
                     >
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div class="min-w-0">
@@ -301,6 +354,26 @@ function createSingles() {
                             </div>
 
                             <div class="flex items-center gap-1 flex-shrink-0">
+                                <label
+                                    class="inline-flex items-center gap-2 rounded-lg px-2 py-1 mr-1 cursor-pointer select-none transition-colors"
+                                    :class="invitation.sent_at ? 'bg-green-50' : 'hover:bg-niebla'"
+                                    :title="sentTooltip(invitation)"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        class="w-4 h-4 rounded cursor-pointer text-green-600 focus:ring-green-500/40"
+                                        :checked="!!invitation.sent_at"
+                                        :disabled="sentForm.processing"
+                                        @change="toggleSent(invitation, $event.target.checked)"
+                                    />
+                                    <span
+                                        class="text-xs font-medium whitespace-nowrap"
+                                        :class="invitation.sent_at ? 'text-green-600' : 'text-tinta/50'"
+                                    >
+                                        {{ invitation.sent_at ? 'Enviada' : 'Marcar enviada' }}
+                                    </span>
+                                </label>
+
                                 <button
                                     @click="copyLink(invitation)"
                                     class="p-2 transition-colors rounded-lg"

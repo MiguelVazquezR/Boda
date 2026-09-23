@@ -23,7 +23,7 @@ class GuestController extends Controller
      */
     public function index(Request $request)
     {
-        $guests = Guest::with(['group', 'invitation:id,display_name,token'])
+        $guests = Guest::with(['group', 'invitation:id,display_name,token,sent_at'])
             ->orderBy('full_name')
             ->get();
 
@@ -480,6 +480,8 @@ class GuestController extends Controller
                 'id' => $invitation->id,
                 'token' => $invitation->token,
                 'display_name' => $invitation->display_name,
+                // Fecha en que se marcó como enviada (null = aún no se envía)
+                'sent_at' => $invitation->sent_at?->toIso8601String(),
                 'public_url' => $invitation->publicUrl(),
                 'rsvp_url' => $invitation->rsvpUrl(),
                 'whatsapp_url' => $invitation->whatsappUrl(),

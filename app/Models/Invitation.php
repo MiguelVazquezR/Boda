@@ -20,6 +20,7 @@ class Invitation extends Model
     protected $fillable = [
         'token',
         'display_name',
+        'sent_at',
     ];
 
     /**
@@ -29,6 +30,13 @@ class Invitation extends Model
     protected $appends = [
         'public_url',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'sent_at' => 'datetime',
+        ];
+    }
 
     protected static function booted(): void
     {
@@ -73,13 +81,14 @@ class Invitation extends Model
     }
 
     /**
-     * Nombre sugerido para mostrar en la invitación a partir de sus miembros:
-     * "Ana & Luis" para una pareja, o el nombre de la persona si va sola.
+     * Nombre sugerido para mostrar en la invitación a partir de sus miembros,
+     * con su nombre completo: "Ana Pérez & Luis García" para una pareja, o el
+     * nombre de la persona si va sola.
      */
     public static function suggestDisplayName(Collection $members): string
     {
         $names = $members
-            ->map(fn (Guest $guest) => trim((string) ($guest->first_name ?: $guest->full_name)))
+            ->map(fn (Guest $guest) => trim((string) ($guest->full_name ?: $guest->first_name)))
             ->filter()
             ->values();
 
