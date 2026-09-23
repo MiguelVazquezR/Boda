@@ -1,14 +1,14 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
-import DialogModal from '@/Components/DialogModal.vue';
+import Dialog from 'primevue/dialog';
+import MultiSelect from 'primevue/multiselect';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import ConfirmDeleteModal from '@/Components/Admin/ConfirmDeleteModal.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
-import MultiSelect from 'primevue/multiselect';
 import { ClipboardDocumentIcon, CheckIcon, ChatBubbleLeftRightIcon, ArrowPathIcon, PencilIcon, TrashIcon, UserPlusIcon, LinkIcon } from '@heroicons/vue/24/outline';
 
 /**
@@ -27,6 +27,30 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'updated']);
+
+/**
+ * Visibilidad del Dialog de PrimeVue. El padre controla el modal con la prop
+ * `show`, así que se traduce a `v-model:visible`; cuando se cierra desde el
+ * modal (clic en el fondo, Escape o el botón «Cerrar») se avisa al padre.
+ */
+const visible = computed({
+    get: () => props.show,
+    set: (value) => {
+        if (!value) emit('close');
+    },
+});
+
+/**
+ * Ajustes del Dialog para que se vea como el resto de los modales del panel:
+ * mismos rellenos, separadores y color de pie. El `!` es necesario porque el
+ * tema de PrimeVue inyecta sus reglas después de las clases de Tailwind.
+ */
+const dialogPt = {
+    root: { class: '!rounded-2xl' },
+    header: { class: '!px-6 !py-4 border-b border-tinta/10' },
+    content: { class: '!px-6 !py-5' },
+    footer: { class: '!px-6 !py-4 bg-niebla border-t border-tinta/10 !gap-2' },
+};
 
 const editingId = ref(null);
 const copiedId = ref(null);
@@ -149,17 +173,34 @@ function createSingles() {
 </script>
 
 <template>
-    <DialogModal :show="show" @close="emit('close')" max-width="2xl">
-        <template #title>
+    <!--
+        Se usa el Dialog de PrimeVue en lugar de Components/DialogModal.vue porque
+        ese se apoya en <dialog showModal()>, que el navegador dibuja en su capa
+        superior (top layer): los overlays flotantes de los componentes hijos
+        (la lista del MultiSelect, los selectores de fecha, etc.) se montan en
+        <body> y quedaban por debajo del modal, sin poder verse. El Dialog de
+        PrimeVue reparte los z-index con ZIndex entre modal y overlays, así que
+        la lista del selector siempre aparece encima.
+    -->
+    <Dialog
+        v-model:visible="visible"
+        modal
+        dismissableMask
+        :closable="false"
+        :draggable="false"
+        :style="{ width: '42rem', maxWidth: '94vw' }"
+        :pt="dialogPt"
+    >
+        <template #header>
             <div class="flex items-center gap-3">
                 <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
                     <LinkIcon class="w-4 h-4 text-primary" />
                 </div>
-                <span>Parejas e invitaciones</span>
+                <span class="text-lg font-medium text-tinta">Parejas e invitaciones</span>
             </div>
         </template>
 
-        <template #content>
+        <template #default>
             <div class="space-y-5">
                 <p class="text-sm text-tinta/60">
                     Cada invitación se comparte con 1 o 2 personas (una pareja) mediante un link único.
@@ -339,5 +380,5 @@ function createSingles() {
         <template #footer>
             <SecondaryButton @click="emit('close')">Cerrar</SecondaryButton>
         </template>
-    </DialogModal>
+    </Dialog>
 </template>

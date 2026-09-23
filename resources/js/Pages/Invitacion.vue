@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import { formatEventDate } from '@/Composables/useEventDate';
-import { HeartIcon } from '@heroicons/vue/24/outline';
 
 /**
  * Puerta de apertura de la invitación (mobile first).
@@ -84,8 +83,15 @@ function openEnvelope() {
                  se recorta por el borde superior. -->
             <div class="relative mx-auto mt-4 h-[20rem] w-[17.5rem] max-w-[88vw] sm:mt-6 sm:h-[22rem] sm:w-[21rem]">
 
-                <!-- Cuerpo trasero del sobre -->
-                <div class="absolute inset-x-0 bottom-0 h-[7.5rem] rounded-[16px] bg-gradient-to-b from-[#dbe9f7] to-[#b9d1e8] shadow-[0_26px_50px_-22px_rgba(6,26,45,0.9)] sm:h-[8.5rem]"></div>
+                <!-- Halo detrás del sobre: separa el papel marino del fondo azul
+                     de la página, que pertenece a la misma familia de color. -->
+                <div class="pointer-events-none absolute -inset-x-6 top-1/4 bottom-0 rounded-[45%] bg-niebla/10 blur-2xl"></div>
+
+                <!-- Cuerpo trasero del sobre: apenas asoma detrás del bolsillo,
+                     pero es el que proyecta la sombra que lo separa del fondo. -->
+                <div class="superficie-sobre absolute inset-x-0 bottom-0 h-[7.5rem] rounded-[16px] shadow-[0_26px_50px_-22px_rgba(3,10,22,0.95)] sm:h-[8.5rem]">
+                    <div class="absolute inset-0 rounded-[16px] bg-sobre-deep/50"></div>
+                </div>
 
                 <!-- Recorte: la tarjeta sólo puede verse dentro del escenario -->
                 <div class="absolute inset-0 z-20 overflow-hidden">
@@ -114,26 +120,39 @@ function openEnvelope() {
                     </div>
                 </div>
                 <!-- Frente del sobre (bolsillo) -->
-                <div class="absolute inset-x-0 bottom-0 z-30 h-[7.5rem] overflow-hidden rounded-[16px] bg-gradient-to-b from-[#eef5fd] to-[#cddff2] sm:h-[8.5rem]">
-                    <!-- Solapas laterales -->
-                    <div class="absolute inset-0 bg-[#c3d7eb]/70 [clip-path:polygon(0_0,0_100%,50%_64%)]"></div>
-                    <div class="absolute inset-0 bg-[#c3d7eb]/70 [clip-path:polygon(100%_0,100%_100%,50%_64%)]"></div>
-                    <!-- Solapa inferior -->
-                    <div class="absolute inset-0 bg-gradient-to-b from-[#f8fbff] to-[#dbe9f7] [clip-path:polygon(0_100%,50%_0,100%_100%)]"></div>
+                <div class="superficie-sobre absolute inset-x-0 bottom-0 z-30 h-[7.5rem] overflow-hidden rounded-[16px] shadow-[inset_0_1px_0_rgba(255,255,255,0.14),inset_0_-20px_30px_-26px_rgba(0,0,0,0.7)] sm:h-[8.5rem]">
+                    <!-- Luz sobre el papel: recibe luz arriba y se apaga abajo -->
+                    <div class="absolute inset-0 bg-gradient-to-b from-white/[0.09] via-white/[0.04] to-transparent"></div>
+                    <!-- Solapas laterales: en penumbra, marcan el doblez -->
+                    <div class="absolute inset-0 bg-sobre-deep/45 [clip-path:polygon(0_0,0_100%,50%_64%)]"></div>
+                    <div class="absolute inset-0 bg-sobre-deep/45 [clip-path:polygon(100%_0,100%_100%,50%_64%)]"></div>
+                    <!-- Solapa inferior: la cara que cierra el sobre, la más iluminada -->
+                    <div class="absolute inset-0 bg-gradient-to-b from-white/[0.08] via-white/[0.01] to-black/15 [clip-path:polygon(0_100%,50%_0,100%_100%)]"></div>
                 </div>
 
                 <!-- Solapa superior: gira sobre su borde para abrir el sobre.
                      El z-index se asigna SOLO desde la clase dinámica: si se dejara
                      un z-40 fijo, al abrir quedarían z-40 y z-10 en el elemento y
                      ganaría z-40 (orden del CSS), tapando la tarjeta. -->
-                <div class="absolute inset-x-0 bottom-[3rem] h-[4.5rem] rounded-t-[16px] bg-gradient-to-b from-[#fbfdff] to-[#cfe0f1] [clip-path:polygon(0_0,100%_0,50%_100%)] [transform-origin:top] transition-transform duration-[600ms] ease-[cubic-bezier(.5,0,.2,1)] motion-reduce:transition-none sm:bottom-[3.5rem] sm:h-[5rem]"
+                <div class="superficie-sobre absolute inset-x-0 bottom-[3rem] h-[4.5rem] rounded-t-[16px] shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] [clip-path:polygon(0_0,100%_0,50%_100%)] [transform-origin:top] transition-transform duration-[600ms] ease-[cubic-bezier(.5,0,.2,1)] motion-reduce:transition-none sm:bottom-[3.5rem] sm:h-[5rem]"
                     :class="[isOpen ? '[transform:rotateX(-180deg)]' : '[transform:rotateX(0deg)]', flapBehind ? 'z-10' : 'z-40']">
-                    <!-- Sello de cera: se rompe al abrir la solapa -->
-                    <div class="absolute bottom-[0.6rem] left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full bg-secondary shadow-[0_5px_12px_-3px_rgba(232,130,122,0.9)] transition-opacity duration-300 motion-reduce:transition-none"
-                        :class="isOpen ? 'opacity-0' : 'opacity-100'">
-                        <HeartIcon class="h-4 w-4 text-white" />
-                    </div>
+                    <!-- La solapa nace iluminada en la bisagra y se apaga hacia la punta -->
+                    <div class="absolute inset-0 bg-gradient-to-b from-white/[0.07] via-transparent to-sobre-deep/35"></div>
                 </div>
+
+                <!-- Sello de cera: es el sello real (dorado) recortado en círculo
+                     desde la captura de referencia. Va centrado en el frente del
+                     sobre y POR ENCIMA de la solapa; no puede ir dentro de ella
+                     porque su recorte triangular lo cortaría. Se desvanece al
+                     abrir la invitación, igual que antes. -->
+                <img
+                    src="/img/sello.png"
+                    alt=""
+                    aria-hidden="true"
+                    draggable="false"
+                    class="pointer-events-none absolute bottom-[3.75rem] left-1/2 z-40 w-[4.75rem] -translate-x-1/2 translate-y-1/2 select-none drop-shadow-[0_6px_10px_rgba(3,10,22,0.55)] transition-opacity duration-500 motion-reduce:transition-none sm:bottom-[4.25rem] sm:w-[5.5rem]"
+                    :class="isOpen ? 'opacity-0' : 'opacity-100'"
+                />
 
                 <!-- Zona táctil de todo el sobre (invisible) -->
                 <button

@@ -37,6 +37,27 @@ El arte de la invitación vive en **Canva** y **no se guarda en el proyecto**: e
 Canva es la fuente de verdad y es lo que ven los invitados. No hace falta ningún SVG ni
 ningún MP3 en el repositorio.
 
+### Papel y sello del sobre (`public/img/`)
+
+La puerta de apertura no usa el arte de Canva: su sobre (papel y sello) se copió de dos
+capturas de referencia temporales (no versionadas) y quedó servido desde `public/img/`:
+
+| Archivo | De dónde sale |
+|---|---|
+| `public/img/sobre-textura.png` | Recorte de la tela (344x152, 38,1 KB) con los píxeles reales de la captura de referencia, a escala 1:1 (bandas de hilo cada ~9,5 px). El color base medido es `#17233D` y vive en la escala `sobre` de `tailwind.config.js` |
+| `public/img/sello.png` | El sello de la captura de referencia, recortado en círculo (176x167, 36,6 KB). La máscara «cálida» deja fuera las esquinas con la textura del sobre y hace de canal alfa; el PNG se cuantiza a 6 bits/canal (error máximo de 2 niveles) porque pesa la mitad |
+
+Ambos se pintan con la clase `.superficie-sobre` (`resources/css/app.css`) y en
+`resources/js/Pages/Invitacion.vue`. Si algún día se cambia el papel o el sello, basta con
+volver a capturar esas dos referencias con los nombres `textura_sobre.png` y `sello.png`
+en una carpeta temporal que no se versione (por ejemplo `public/temp/`).
+
+La tela se recorta más grande que la cara más grande del sobre (336x136) y con el alto
+múltiplo del periodo de la trama (152 = 8 x 19 px = 16 periodos), así que no se repite en
+ninguna cara y, si alguna creciera, la repetición seguiría alineada. Las motas claras de la
+captura se sustituyeron por la media de sus vecinos. Si la trama se viera grande o pequeña,
+se ajusta con `background-size` en `.superficie-sobre`.
+
 ### `build-artwork.mjs` (respaldo opcional, no se usa en producción)
 
 Si algún día Canva dejara de estar disponible, este script convierte un export de Canva
