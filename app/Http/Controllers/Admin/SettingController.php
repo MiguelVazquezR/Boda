@@ -22,6 +22,10 @@ class SettingController extends Controller
             // URL efectiva del sitio de Canva (la de la BD o la de config/wedding.php),
             // para que el campo del panel muestre siempre el link que está activo.
             'canvaUrl' => $settings->invitationArtworkUrl(),
+            // Link efectivo de la mesa de regalos (BD o config/wedding.php).
+            'giftRegistryUrl' => $settings->giftRegistryUrl(),
+            // Datos efectivos de la cuenta bancaria (BD o config/wedding.php).
+            'giftBank' => $settings->giftBankDetails(),
         ]);
     }
 

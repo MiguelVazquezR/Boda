@@ -4,7 +4,6 @@ import { useForm, router } from '@inertiajs/vue3';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Select from 'primevue/select';
-import MultiSelect from 'primevue/multiselect';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import AppLayout from '@/Layouts/AppLayout.vue';
@@ -17,7 +16,7 @@ import EmptyState from '@/Components/Admin/EmptyState.vue';
 import ConfirmDeleteModal from '@/Components/Admin/ConfirmDeleteModal.vue';
 import GuestDetailModal from './Partials/GuestDetailModal.vue';
 import InvitationsManagerModal from './Partials/InvitationsManagerModal.vue';
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon, CheckIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon, CheckIcon, ClipboardDocumentIcon, ChatBubbleLeftRightIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
     guests: Array,
@@ -25,6 +24,9 @@ const props = defineProps({
     statusCounts: Object,
     // Invitaciones digitales (parejas o personas solas) con su link público
     invitations: { type: Array, default: () => [] },
+    // Catálogos para la edición rápida de celdas (grupos y mesas)
+    groups: { type: Array, default: () => [] },
+    tables: { type: Array, default: () => [] },
 });
 
 // ── Filtros de la tabla (client-side: aplican a TODOS los registros, no solo a la página actual) ──
@@ -36,10 +38,8 @@ const filters = ref({
     global: { value: normalizeText(props.filters?.search ?? '') || null, matchMode: 'contains' },
     rsvp_status: { value: props.filters?.status ?? null, matchMode: 'equals' },
     gender: { value: null, matchMode: 'equals' },
-    'group.name': { value: null, matchMode: 'equals' },
+    guest_group_id: { value: null, matchMode: 'equals' },
     origin: { value: null, matchMode: 'equals' },
-    city: { value: null, matchMode: 'in' },
-    age: { value: null, matchMode: 'equals' },
     table_group: { value: null, matchMode: 'equals' },
     invitation_state: { value: null, matchMode: 'equals' },
 });
@@ -80,10 +80,8 @@ function clearFilters() {
         global: { value: null, matchMode: 'contains' },
         rsvp_status: { value: null, matchMode: 'equals' },
         gender: { value: null, matchMode: 'equals' },
-        'group.name': { value: null, matchMode: 'equals' },
+        guest_group_id: { value: null, matchMode: 'equals' },
         origin: { value: null, matchMode: 'equals' },
-        city: { value: null, matchMode: 'in' },
-        age: { value: null, matchMode: 'equals' },
         table_group: { value: null, matchMode: 'equals' },
         invitation_state: { value: null, matchMode: 'equals' },
     };
@@ -112,25 +110,21 @@ const invitationOptions = [
     { label: 'Sin invitación', value: 'without' },
 ];
 
-const groupOptions = computed(() => {
-    const names = [...new Set(props.guests.map((g) => g.group?.name).filter(Boolean))].sort();
-    return names.map((n) => ({ label: n, value: n }));
-});
+/** Grupos (catálogo completo) para el filtro y la edición rápida de la tabla. */
+const groupOptions = computed(() =>
+    props.groups.map((group) => ({ label: group.name, value: group.id })),
+);
 
-const cityOptions = computed(() => {
-    const cities = [...new Set(props.guests.map((g) => g.city).filter(Boolean))].sort();
-    return cities.map((c) => ({ label: c, value: c }));
-});
+/** Mesas para el filtro y la edición rápida: catálogo + las ya asignadas. */
+const tableOptions = computed(() => {
+    const names = new Set([
+        ...props.tables,
+        ...props.guests.map((g) => g.table_group).filter(Boolean),
+    ]);
 
-const ageOptions = computed(() => {
-    const ages = [...new Set(props.guests.map((g) => g.age).filter((a) => a !== null && a !== undefined))].sort((a, b) => a - b);
-    return ages.map((a) => ({ label: String(a), value: a }));
-});
-
-const tableGroupOptions = computed(() => {
-    const tables = [...new Set(props.guests.map((g) => g.table_group).filter(Boolean))]
-        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
-    return tables.map((t) => ({ label: t, value: t }));
+    return [...names]
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+        .map((name) => ({ label: name, value: name }));
 });
 
 // ── Formato ──
@@ -152,6 +146,32 @@ function goToCreate() {
 
 function goToEdit(guest) {
     router.get(route('admin.guests.edit', guest.id));
+}
+
+// ── Edición rápida de celdas (origen, celular, grupo y mesa) ──
+/**
+ * Guarda el cambio hecho directamente en una celda de la tabla. PrimeVue avisa
+ * aquí al confirmar la edición (Enter, elegir una opción o clic fuera).
+ */
+function onCellEditComplete(event) {
+    const { data, field, newValue } = event;
+
+    // El celular debe tener exactamente 10 dígitos (o quedar vacío para borrarlo).
+    if (field === 'phone' && newValue && String(newValue).length !== 10) {
+        window.alert('El celular debe tener exactamente 10 dígitos.');
+        event.preventDefault(); // mantiene la celda en edición
+        return;
+    }
+
+    const value = newValue === '' || newValue === undefined ? null : newValue;
+
+    router.patch(route('admin.guests.cell', data.id), { field, value }, {
+        preserveScroll: true,
+        preserveState: true,
+        onError: (errors) => {
+            window.alert(Object.values(errors)[0] ?? 'No se pudo guardar el cambio.');
+        },
+    });
 }
 
 // ── Import CSV Modal ──
@@ -227,19 +247,81 @@ function closeInvitations() {
 
 // ── Copiar link y marcar como enviada desde la columna «Invitación» ──
 const copiedInvitationId = ref(null);
+const copiedInvitationTextId = ref(null);
 const invitationSentForm = useForm({ sent: false });
+
+/**
+ * Copia texto al portapapeles, con respaldo para navegadores o contextos sin
+ * Clipboard API (por ejemplo, la página abierta por http:// en la red local).
+ */
+async function copyToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            // Continúa con el respaldo (textarea + execCommand).
+        }
+    }
+
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return copied;
+    } catch {
+        return false;
+    }
+}
 
 /** Copia el link público de la invitación (con confirmación visual de 2s). */
 async function copyInvitationLink(invitation) {
-    try {
-        await navigator.clipboard.writeText(invitation.public_url);
-        copiedInvitationId.value = invitation.id;
-        setTimeout(() => {
-            if (copiedInvitationId.value === invitation.id) copiedInvitationId.value = null;
-        }, 2000);
-    } catch {
-        window.prompt('Copia el link de la invitación:', invitation.public_url);
+    const url = invitation.public_url;
+
+    if (!url) {
+        window.alert('El link de la invitación no está disponible en esta página. Recárgala e intenta de nuevo.');
+        return;
     }
+
+    if (!(await copyToClipboard(url))) {
+        window.prompt('Copia el link de la invitación:', url);
+        return;
+    }
+
+    copiedInvitationId.value = invitation.id;
+    setTimeout(() => {
+        if (copiedInvitationId.value === invitation.id) copiedInvitationId.value = null;
+    }, 2000);
+}
+
+/**
+ * Copia el texto completo de la invitación (nombres, lugares reservados y
+ * links) para pegarlo en WhatsApp (con confirmación visual de 2s).
+ */
+async function copyInvitationMessage(invitation) {
+    const text = invitation.share_message;
+
+    // Si la página se abrió antes de generar los textos, hay que recargarla.
+    if (!text) {
+        window.alert('El texto de la invitación aún no está disponible en esta página. Recárgala (F5) e intenta de nuevo.');
+        return;
+    }
+
+    if (!(await copyToClipboard(text))) {
+        window.prompt('Copia el texto de la invitación:', text);
+        return;
+    }
+
+    copiedInvitationTextId.value = invitation.id;
+    setTimeout(() => {
+        if (copiedInvitationTextId.value === invitation.id) copiedInvitationTextId.value = null;
+    }, 2000);
 }
 
 /** Marca o desmarca la invitación como enviada sin salir de la tabla. */
@@ -332,6 +414,8 @@ function sentTooltip(invitation) {
                             sortField="full_name"
                             :sortOrder="1"
                             stripedRows
+                            editMode="cell"
+                            @cell-edit-complete="onCellEditComplete"
                         >
                             <template #empty>
                                 <p class="py-6 text-center text-tinta/50 text-sm">
@@ -347,30 +431,46 @@ function sentTooltip(invitation) {
                                 </template>
                             </Column>
 
-                            <Column field="age" header="Edad" sortable :showFilterMenu="false" filterMatchMode="equals">
-                                <template #body="{ data }">
-                                    <span class="text-tinta/70">{{ data.age ?? '—' }}</span>
-                                </template>
-                                <template #filter>
-                                    <Select v-model="filters['age'].value" :options="ageOptions" optionLabel="label" optionValue="value" placeholder="Edad" showClear class="!w-full" />
-                                </template>
-                            </Column>
-
                             <Column field="gender" header="Género" :showFilterMenu="false">
                                 <template #body="{ data }">
                                     <span class="text-tinta/70">{{ formatGender(data.gender) }}</span>
+                                </template>
+                                <template #editor="{ data, field, editorSaveCallback }">
+                                    <Select
+                                        v-model="data[field]"
+                                        :options="genderOptions"
+                                        optionLabel="label"
+                                        optionValue="value"
+                                        placeholder="Género"
+                                        showClear
+                                        class="!w-full"
+                                        @update:model-value="editorSaveCallback"
+                                    />
                                 </template>
                                 <template #filter>
                                     <Select v-model="filters['gender'].value" :options="genderOptions" optionLabel="label" optionValue="value" placeholder="Género" showClear class="!w-full" />
                                 </template>
                             </Column>
 
-                            <Column field="group.name" header="Grupo" :showFilterMenu="false">
+                            <Column field="guest_group_id" header="Grupo" :showFilterMenu="false">
                                 <template #body="{ data }">
                                     <span class="text-tinta/50">{{ data.group?.name || data.table_group || '—' }}</span>
                                 </template>
+                                <template #editor="{ data, field, editorSaveCallback }">
+                                    <Select
+                                        v-model="data[field]"
+                                        :options="groupOptions"
+                                        optionLabel="label"
+                                        optionValue="value"
+                                        placeholder="Sin grupo"
+                                        showClear
+                                        filter
+                                        class="!w-full"
+                                        @update:model-value="editorSaveCallback"
+                                    />
+                                </template>
                                 <template #filter>
-                                    <Select v-model="filters['group.name'].value" :options="groupOptions" optionLabel="label" optionValue="value" placeholder="Grupo" showClear class="!w-full" />
+                                    <Select v-model="filters['guest_group_id'].value" :options="groupOptions" optionLabel="label" optionValue="value" placeholder="Grupo" showClear class="!w-full" />
                                 </template>
                             </Column>
 
@@ -378,34 +478,34 @@ function sentTooltip(invitation) {
                                 <template #body="{ data }">
                                     <span class="text-tinta/70">{{ data.phone || '—' }}</span>
                                 </template>
+                                <template #editor="{ data, field }">
+                                    <InputText
+                                        :model-value="data[field]"
+                                        maxlength="10"
+                                        class="!w-full"
+                                        @update:model-value="(value) => data[field] = String(value ?? '').replace(/\D/g, '').slice(0, 10)"
+                                    />
+                                </template>
                             </Column>
 
                             <Column field="origin" header="Origen" :showFilterMenu="false">
                                 <template #body="{ data }">
                                     <span class="text-tinta/70">{{ formatOrigin(data.origin) }}</span>
                                 </template>
-                                <template #filter>
-                                    <Select v-model="filters['origin'].value" :options="originOptions" optionLabel="label" optionValue="value" placeholder="Origen" showClear class="!w-full" />
-                                </template>
-                            </Column>
-
-                            <Column field="city" header="Ciudad" :showFilterMenu="false">
-                                <template #body="{ data }">
-                                    <span class="text-tinta/50">{{ data.city || '—' }}</span>
-                                </template>
-                                <template #filter>
-                                    <MultiSelect
-                                        v-model="filters['city'].value"
-                                        :options="cityOptions"
+                                <template #editor="{ data, field, editorSaveCallback }">
+                                    <Select
+                                        v-model="data[field]"
+                                        :options="originOptions"
                                         optionLabel="label"
                                         optionValue="value"
-                                        placeholder="Ciudades"
-                                        display="chip"
-                                        :maxSelectedLabels="2"
-                                        :filter="true"
-                                        filterPlaceholder="Buscar ciudad..."
+                                        placeholder="Origen"
+                                        showClear
                                         class="!w-full"
+                                        @update:model-value="editorSaveCallback"
                                     />
+                                </template>
+                                <template #filter>
+                                    <Select v-model="filters['origin'].value" :options="originOptions" optionLabel="label" optionValue="value" placeholder="Origen" showClear class="!w-full" />
                                 </template>
                             </Column>
 
@@ -432,6 +532,19 @@ function sentTooltip(invitation) {
                                         >
                                             <CheckIcon v-if="copiedInvitationId === data.invitation.id" class="w-4 h-4" />
                                             <ClipboardDocumentIcon v-else class="w-4 h-4" />
+                                        </button>
+
+                                        <!-- Copiar el texto completo para WhatsApp -->
+                                        <button
+                                            @click="copyInvitationMessage(data.invitation)"
+                                            class="p-1.5 transition-colors rounded-lg"
+                                            :class="copiedInvitationTextId === data.invitation.id
+                                                ? 'text-green-600'
+                                                : 'text-tinta/30 hover:text-green-500 hover:bg-green-50'"
+                                            :title="copiedInvitationTextId === data.invitation.id ? 'Texto copiado' : 'Copiar texto para WhatsApp'"
+                                        >
+                                            <CheckIcon v-if="copiedInvitationTextId === data.invitation.id" class="w-4 h-4" />
+                                            <ChatBubbleLeftRightIcon v-else class="w-4 h-4" />
                                         </button>
 
                                         <!-- Marcar como enviada -->
@@ -467,8 +580,20 @@ function sentTooltip(invitation) {
                                 <template #body="{ data }">
                                     <span class="text-tinta/70">{{ data.table_group || '—' }}</span>
                                 </template>
+                                <template #editor="{ data, field, editorSaveCallback }">
+                                    <Select
+                                        v-model="data[field]"
+                                        :options="tableOptions"
+                                        optionLabel="label"
+                                        optionValue="value"
+                                        placeholder="Sin mesa"
+                                        showClear
+                                        class="!w-full"
+                                        @update:model-value="editorSaveCallback"
+                                    />
+                                </template>
                                 <template #filter>
-                                    <Select v-model="filters['table_group'].value" :options="tableGroupOptions" optionLabel="label" optionValue="value" placeholder="Mesa" showClear class="!w-full" />
+                                    <Select v-model="filters['table_group'].value" :options="tableOptions" optionLabel="label" optionValue="value" placeholder="Mesa" showClear class="!w-full" />
                                 </template>
                             </Column>
 

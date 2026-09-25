@@ -19,6 +19,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Mesa de regalos
+    |--------------------------------------------------------------------------
+    |
+    | Link de la lista de sugerencias (Amazon) que se muestra en la sección
+    | «Mesa de Regalos» de la página. Se puede sobrescribir desde el panel de
+    | administración (Configuración → Mesa de regalos) y por variable de
+    | entorno.
+    |
+    */
+
+    'gift_registry_url' => env('WEDDING_GIFT_REGISTRY_URL', 'https://www.amazon.com.mx/hz/wishlist/ls/21361641TPZJC?ref_=wl_share'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Nombres de los novios
     |--------------------------------------------------------------------------
     |

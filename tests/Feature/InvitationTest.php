@@ -189,6 +189,46 @@ class InvitationTest extends TestCase
         $this->assertSame($invitation->id, $luis->fresh()->invitation_id);
     }
 
+    public function test_el_texto_para_whatsapp_incluye_nombres_lugares_y_links(): void
+    {
+        $invitation = $this->invitation(
+            [$this->guest('Ana Pérez'), $this->guest('Luis Pérez')],
+            'Ana & Luis',
+        );
+
+        $message = $invitation->shareMessage();
+
+        $this->assertStringContainsString('¡Hola, Ana Pérez y Luis Pérez!', $message);
+        $this->assertStringContainsString('hemos reservado 2 lugares especialmente', $message);
+        $this->assertStringContainsString($invitation->publicUrl(), $message);
+        $this->assertStringContainsString(route('home'), $message);
+        $this->assertStringContainsString("Con mucho cariño,\n\nJosé y Elizabeth", $message);
+    }
+
+    public function test_el_texto_para_whatsapp_usa_singular_cuando_hay_un_solo_lugar(): void
+    {
+        $invitation = $this->invitation([$this->guest('Ana Pérez')], 'Ana Pérez');
+
+        $message = $invitation->shareMessage();
+
+        $this->assertStringContainsString('¡Hola, Ana Pérez!', $message);
+        $this->assertStringContainsString('hemos reservado 1 lugar especialmente', $message);
+        $this->assertStringNotContainsString('1 lugares', $message);
+    }
+
+    public function test_el_listado_de_invitados_incluye_el_texto_para_whatsapp(): void
+    {
+        $this->actingAs($this->adminUser(), 'sanctum');
+
+        $invitation = $this->invitation([$this->guest('Ana Pérez')], 'Ana Pérez');
+
+        $this->get(route('admin.guests.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/Guests/Index')
+                ->where('guests.0.invitation.share_message', $invitation->shareMessage()));
+    }
+
     public function test_no_permite_mas_de_dos_invitados_por_invitacion(): void
     {
         $this->actingAs($this->adminUser(), 'sanctum');

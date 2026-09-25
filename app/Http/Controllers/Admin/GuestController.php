@@ -11,6 +11,7 @@ use App\Models\GuestTable;
 use App\Models\Invitation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class GuestController extends Controller
@@ -23,7 +24,13 @@ class GuestController extends Controller
      */
     public function index(Request $request)
     {
-        $guests = Guest::with(['group', 'invitation:id,display_name,token,sent_at'])
+        // Los miembros de cada invitación se cargan para poder armar el texto
+        // de WhatsApp (share_message) sin consultas N+1.
+        $guests = Guest::with([
+            'group',
+            'invitation:id,display_name,token,sent_at',
+            'invitation.members:id,first_name,full_name,invitation_id',
+        ])
             ->orderBy('full_name')
             ->get();
 
@@ -31,6 +38,9 @@ class GuestController extends Controller
             'guests' => $guests,
             // Invitaciones digitales (parejas o personas solas) y sus links
             'invitations' => $this->invitations(),
+            // Catálogos para la edición rápida de celdas en la tabla
+            'groups' => GuestGroup::orderBy('name')->get(['id', 'name']),
+            'tables' => GuestTable::orderBy('name')->pluck('name'),
             'filters' => $request->only(['status', 'search']),
             'statusCounts' => [
                 'pending' => Guest::byStatus('pending')->count(),
@@ -84,6 +94,40 @@ class GuestController extends Controller
         GuestTable::ensureExists($guest->table_group);
 
         return back()->with('success', 'Invitado actualizado correctamente.');
+    }
+
+    /**
+     * Edición rápida de una celda de la tabla de invitados: guarda sólo el
+     * campo indicado (origen, celular, grupo o mesa) sin abrir el formulario.
+     */
+    public function updateCell(Request $request, Guest $guest)
+    {
+        $validated = $request->validate([
+            'field' => ['required', 'string', Rule::in(['gender', 'origin', 'phone', 'guest_group_id', 'table_group'])],
+            'value' => ['nullable'],
+        ]);
+
+        // Mismas reglas que el formulario completo (UpdateGuestRequest), sólo
+        // para el campo que se está editando desde la tabla.
+        $rules = match ($validated['field']) {
+            'gender' => [Rule::in(['femenino', 'masculino'])],
+            'origin' => [Rule::in(['foraneo', 'local'])],
+            'phone' => ['digits:10'],
+            'guest_group_id' => ['integer', 'exists:guest_groups,id'],
+            'table_group' => ['string', 'max:255'],
+        };
+
+        $value = $request->validate(['value' => array_merge(['nullable'], $rules)], [
+            'value.digits' => 'El celular debe tener exactamente 10 dígitos.',
+            'value.in' => 'El valor seleccionado no es válido.',
+            'value.exists' => 'El grupo seleccionado no es válido.',
+        ])['value'] ?? null;
+
+        $guest->update([$validated['field'] => $value]);
+
+        GuestTable::ensureExists($guest->table_group);
+
+        return back();
     }
 
     /**
