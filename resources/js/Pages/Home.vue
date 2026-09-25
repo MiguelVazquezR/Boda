@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useForm, router, Head } from '@inertiajs/vue3';
 import axios from 'axios';
-import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon } from '@heroicons/vue/24/outline';
+import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon, BanknotesIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/vue/24/outline';
 import DressCodeGrid from '@/Components/DressCode/DressCodeGrid.vue';
 import DressCodeCarousel from '@/Components/DressCode/DressCodeCarousel.vue';
 import { parseEventDate, formatEventDate as formatDate, formatEventTime as formatTime } from '@/Composables/useEventDate';
@@ -24,6 +24,9 @@ const props = defineProps({
     // Link de la mesa de regalos (lista de sugerencias en Amazon).
     // Editable desde el panel de administración.
     giftRegistryUrl: String,
+    // Cuenta bancaria para regalos (segunda opción): { bank, clabe, holder }.
+    // Editable desde el panel de administración.
+    giftBank: Object,
 });
 
 // ── Ilustración predeterminada del itinerario según el título ──
@@ -303,6 +306,43 @@ function closeLightbox() { lightboxImage.value = null; }
 
 // ── WhatsApp fallback ────────────────────────────────────────────
 const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20lista%20de%20invitados%20de%20la%20boda.%20%C2%BFNos%20pueden%20ayudar%3F';
+
+// ── Cuenta bancaria (segunda opción de regalo) ───────────────────
+// Solo se muestra si el panel tiene configurada una CLABE.
+const bankDetails = computed(() => (props.giftBank?.clabe ? props.giftBank : null));
+
+// CLABE legible con espacios (3-3-11-1); al copiar se usan solo los dígitos.
+const bankClabeFormatted = computed(() => {
+    const digits = (bankDetails.value?.clabe || '').replace(/\D/g, '');
+
+    return digits.length === 18
+        ? digits.replace(/^(\d{3})(\d{3})(\d{11})(\d)$/, '$1 $2 $3 $4')
+        : bankDetails.value?.clabe || '';
+});
+
+const bankCopied = ref(false);
+
+async function copyBankClabe() {
+    const clabe = (bankDetails.value?.clabe || '').replace(/\D/g, '');
+    if (!clabe) return;
+
+    try {
+        await navigator.clipboard.writeText(clabe);
+    } catch {
+        // Respaldo para navegadores donde la Clipboard API no está disponible.
+        const textarea = document.createElement('textarea');
+        textarea.value = clabe;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    }
+
+    bankCopied.value = true;
+    setTimeout(() => { bankCopied.value = false; }, 2000);
+}
 
 // ── Encuentra tu Mesa ────────────────────────────────────────────
 // Las mesas se asignan en el panel admin ~15 días antes del evento. La sección se
@@ -728,7 +768,7 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
         </section>
 
         <!-- ════════════════ MESA DE REGALOS ════════════════ -->
-        <section v-if="giftRegistryUrl" id="regalos" class="py-24 md:py-32 px-4 bg-gradient-to-br from-primary/10 via-niebla to-secondary/10">
+        <section v-if="giftRegistryUrl || bankDetails" id="regalos" class="py-24 md:py-32 px-4 bg-gradient-to-br from-primary/10 via-niebla to-secondary/10">
             <div class="max-w-3xl mx-auto">
                 <div class="text-center mb-16">
                     <div class="flex items-center justify-center gap-4 mb-4">
@@ -739,7 +779,7 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                     <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">El Mejor Regalo Eres Tú</h2>
                 </div>
 
-                <div class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-tinta/10 shadow-lg shadow-tinta/5 text-center animate-slide-up">
+                <div v-if="giftRegistryUrl" class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-tinta/10 shadow-lg shadow-tinta/5 text-center animate-slide-up">
                     <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
                         <GiftIcon class="w-8 h-8 text-primary" />
                     </div>
@@ -755,6 +795,54 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                     </a>
                     <p class="text-tinta/40 text-sm mt-4">Lista de sugerencias en Amazon 🎁</p>
                 </div>
+
+                <!-- Segunda opción: cuenta bancaria (transferencia o donativo) -->
+                <template v-if="bankDetails">
+                    <div v-if="giftRegistryUrl" class="flex items-center gap-4 my-10">
+                        <div class="h-px flex-1 bg-tinta/10"></div>
+                        <span class="text-tinta/40 text-xs tracking-[0.3em] uppercase">O si prefieres</span>
+                        <div class="h-px flex-1 bg-tinta/10"></div>
+                    </div>
+
+                    <div class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-tinta/10 shadow-lg shadow-tinta/5 text-center animate-slide-up">
+                        <div class="w-16 h-16 bg-secondary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                            <BanknotesIcon class="w-8 h-8 text-secondary" />
+                        </div>
+                        <p class="text-tinta/80 text-lg leading-relaxed max-w-2xl mx-auto">
+                            Su presencia en nuestra boda es el regalo más grande que nos pueden dar. Sin embargo,
+                            si desean tener un detalle adicional con nosotros para apoyarnos en esta nueva etapa
+                            y nuestros proyectos futuros, ponemos a su disposición los datos de nuestra cuenta
+                            bancaria. ¡Agradecemos de corazón todo su cariño y apoyo!
+                        </p>
+
+                        <div class="mt-8 max-w-md mx-auto bg-niebla/70 border border-tinta/10 rounded-2xl p-6 space-y-4 text-left">
+                            <div v-if="bankDetails.bank" class="flex items-center justify-between gap-4">
+                                <span class="text-tinta/50 text-xs tracking-wider uppercase">Banco</span>
+                                <span class="font-slab text-tinta">{{ bankDetails.bank }}</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="text-tinta/50 text-xs tracking-wider uppercase">CLABE</span>
+                                <span class="font-mono text-tinta">{{ bankClabeFormatted }}</span>
+                            </div>
+                            <div v-if="bankDetails.holder" class="flex items-center justify-between gap-4">
+                                <span class="text-tinta/50 text-xs tracking-wider uppercase">Titular</span>
+                                <span class="font-slab text-tinta text-right">{{ bankDetails.holder }}</span>
+                            </div>
+
+                            <button
+                                @click="copyBankClabe"
+                                :class="bankCopied
+                                    ? 'bg-secondary text-white shadow-lg shadow-secondary/20'
+                                    : 'bg-tinta hover:bg-tinta-light text-white shadow-lg shadow-tinta/20'"
+                                class="w-full inline-flex items-center justify-center gap-2 font-slab font-bold px-6 py-3 rounded-2xl transition-all duration-300"
+                            >
+                                <CheckIcon v-if="bankCopied" class="w-5 h-5" />
+                                <ClipboardDocumentIcon v-else class="w-5 h-5" />
+                                {{ bankCopied ? '¡CLABE copiada!' : 'Copiar CLABE' }}
+                            </button>
+                        </div>
+                    </div>
+                </template>
             </div>
         </section>
 

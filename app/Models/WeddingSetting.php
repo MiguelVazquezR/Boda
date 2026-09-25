@@ -55,6 +55,9 @@ class WeddingSetting extends Model
         'rsvp_deadline',
         'canva_url',
         'gift_registry_url',
+        'gift_bank_name',
+        'gift_bank_clabe',
+        'gift_bank_holder',
     ];
 
     /**
@@ -129,6 +132,20 @@ class WeddingSetting extends Model
     public function giftRegistryUrl(): string
     {
         return (string) ($this->gift_registry_url ?: config('wedding.gift_registry_url'));
+    }
+
+    /**
+     * Datos de la cuenta bancaria para regalos (segunda opción, opcional).
+     * Se configuran desde el panel de administración; si la CLABE está vacía,
+     * el bloque no se muestra en el sitio.
+     */
+    public function giftBankDetails(): array
+    {
+        return [
+            'bank' => (string) ($this->gift_bank_name ?? ''),
+            'clabe' => (string) ($this->gift_bank_clabe ?? ''),
+            'holder' => (string) ($this->gift_bank_holder ?? ''),
+        ];
     }
 
     /**

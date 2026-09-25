@@ -24,6 +24,8 @@ class SettingController extends Controller
             'canvaUrl' => $settings->invitationArtworkUrl(),
             // Link efectivo de la mesa de regalos (BD o config/wedding.php).
             'giftRegistryUrl' => $settings->giftRegistryUrl(),
+            // Datos efectivos de la cuenta bancaria (BD o config/wedding.php).
+            'giftBank' => $settings->giftBankDetails(),
         ]);
     }
 

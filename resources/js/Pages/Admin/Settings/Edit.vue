@@ -18,6 +18,8 @@ const props = defineProps({
     canvaUrl: String,
     // Link efectivo de la mesa de regalos (BD o config/wedding.php)
     giftRegistryUrl: String,
+    // Datos efectivos de la cuenta bancaria (para precargar el formulario)
+    giftBank: Object,
 });
 
 // Link fijo que debe usar el botón «Confirmar asistencia» dentro de Canva:
@@ -78,6 +80,10 @@ const form = useForm({
     canva_url: props.settings?.canva_url || props.canvaUrl || '',
     // Mesa de regalos (lista de sugerencias en Amazon)
     gift_registry_url: props.settings?.gift_registry_url || props.giftRegistryUrl || '',
+    // Cuenta bancaria (segunda opción de regalo)
+    gift_bank_name: props.settings?.gift_bank_name || props.giftBank?.bank || '',
+    gift_bank_clabe: props.settings?.gift_bank_clabe || props.giftBank?.clabe || '',
+    gift_bank_holder: props.settings?.gift_bank_holder || props.giftBank?.holder || '',
 });
 
 // Previews
@@ -589,7 +595,7 @@ function submit() {
                             «Mesa de Regalos» de la página.
                         </p>
                     </div>
-                    <div class="p-6">
+                    <div class="p-6 space-y-6">
                         <div class="max-w-xl">
                             <InputLabel value="URL de la lista de regalos" class="mb-1" />
                             <TextInput v-model="form.gift_registry_url" type="url" class="w-full"
@@ -598,6 +604,36 @@ function submit() {
                             <p class="text-xs text-tinta/40 mt-2">
                                 Si lo dejas vacío se usa el link predeterminado del sitio.
                             </p>
+                        </div>
+
+                        <div class="pt-6 border-t border-tinta/10">
+                            <h4 class="font-slab text-tinta">Cuenta bancaria (opcional)</h4>
+                            <p class="text-tinta/50 text-sm mt-1 mb-4">
+                                Segunda opción de regalo: se muestra debajo de la lista de Amazon, para
+                                quienes prefieran transferir o donar. Si borras la CLABE, el bloque
+                                desaparece del sitio.
+                            </p>
+                            <div class="grid sm:grid-cols-2 gap-4 max-w-2xl">
+                                <div>
+                                    <InputLabel value="Banco" class="mb-1" />
+                                    <TextInput v-model="form.gift_bank_name" class="w-full" placeholder="BBVA" />
+                                    <InputError :message="form.errors.gift_bank_name" class="mt-1" />
+                                </div>
+                                <div>
+                                    <InputLabel value="Titular de la cuenta" class="mb-1" />
+                                    <TextInput v-model="form.gift_bank_holder" class="w-full" placeholder="Nombre completo" />
+                                    <InputError :message="form.errors.gift_bank_holder" class="mt-1" />
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <InputLabel value="CLABE interbancaria" class="mb-1" />
+                                    <TextInput v-model="form.gift_bank_clabe" class="w-full font-mono"
+                                        placeholder="18 dígitos, ej. 012180015412256086" />
+                                    <InputError :message="form.errors.gift_bank_clabe" class="mt-1" />
+                                    <p class="text-xs text-tinta/40 mt-2">
+                                        Puedes pegarla con espacios; se guardan solo los 18 dígitos.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

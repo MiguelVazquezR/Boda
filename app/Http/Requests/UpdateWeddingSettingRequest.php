@@ -11,6 +11,20 @@ class UpdateWeddingSettingRequest extends FormRequest
         return true; // La autorización se maneja con el middleware admin en la ruta
     }
 
+    /**
+     * Normaliza la CLABE antes de validar: quita espacios, guiones o puntos,
+     * para que se pueda pegar tal como aparece en la banca en línea
+     * (por ejemplo "012 180 01541225608 6").
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('gift_bank_clabe')) {
+            $digits = preg_replace('/\D+/', '', (string) $this->input('gift_bank_clabe'));
+
+            $this->merge(['gift_bank_clabe' => $digits !== '' ? $digits : null]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -66,6 +80,11 @@ class UpdateWeddingSettingRequest extends FormRequest
             'rsvp_deadline' => ['nullable', 'date'],
             'canva_url' => ['nullable', 'url', 'max:500'],
             'gift_registry_url' => ['nullable', 'url', 'max:500'],
+
+            // Mesa de regalos → cuenta bancaria (segunda opción de regalo)
+            'gift_bank_name' => ['nullable', 'string', 'max:255'],
+            'gift_bank_clabe' => ['nullable', 'digits:18'],
+            'gift_bank_holder' => ['nullable', 'string', 'max:255'],
         ];
     }
 
@@ -73,6 +92,7 @@ class UpdateWeddingSettingRequest extends FormRequest
     {
         return [
             'event_datetime.required' => 'La fecha y hora del evento es obligatoria.',
+            'gift_bank_clabe.digits' => 'La CLABE debe tener exactamente 18 dígitos.',
         ];
     }
 }

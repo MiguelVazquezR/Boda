@@ -59,6 +59,8 @@ class PageController extends Controller
             // Link de la mesa de regalos (lista de sugerencias). Editable desde el
             // panel; si está vacío se usa config/wedding.php.
             'giftRegistryUrl' => $settings->giftRegistryUrl(),
+            // Cuenta bancaria para regalos (segunda opción, opcional).
+            'giftBank' => $settings->giftBankDetails(),
         ];
     }
 
