@@ -54,6 +54,7 @@ class WeddingSetting extends Model
         'dress_code_men_other_desc',
         'rsvp_deadline',
         'canva_url',
+        'gift_registry_url',
     ];
 
     /**
@@ -122,11 +123,40 @@ class WeddingSetting extends Model
     }
 
     /**
+     * Link de la mesa de regalos (lista de sugerencias en Amazon).
+     * Si no se configuró desde el panel, se usa el valor por defecto de config/wedding.php.
+     */
+    public function giftRegistryUrl(): string
+    {
+        return (string) ($this->gift_registry_url ?: config('wedding.gift_registry_url'));
+    }
+
+    /**
      * Nombres de los novios tal como se muestran en la invitación.
      */
     public static function coupleNames(): string
     {
         return (string) config('wedding.couple_names');
+    }
+
+    /**
+     * Nombres cortos de los novios ("José y Elizabeth") para textos
+     * informales como el mensaje de WhatsApp: primer nombre de cada uno.
+     */
+    public static function coupleFirstNames(): string
+    {
+        $parts = array_values(array_filter(array_map('trim', preg_split('/\s*&\s*/u', static::coupleNames()) ?: [])));
+
+        if (count($parts) !== 2) {
+            return static::coupleNames();
+        }
+
+        $firstNames = array_map(
+            fn (string $name) => preg_split('/\s+/u', $name)[0] ?? $name,
+            $parts,
+        );
+
+        return implode(' y ', $firstNames);
     }
 
     /**

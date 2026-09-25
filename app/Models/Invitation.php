@@ -24,11 +24,13 @@ class Invitation extends Model
     ];
 
     /**
-     * El link público se incluye siempre en la serialización (panel de invitados
-     * y modal de detalle lo muestran sin cálculos extra en el frontend).
+     * El link público y el texto de WhatsApp se incluyen siempre en la
+     * serialización (panel de invitados y modal de detalle los usan sin
+     * cálculos extra en el frontend).
      */
     protected $appends = [
         'public_url',
+        'share_message',
     ];
 
     protected function casts(): array
@@ -129,5 +131,43 @@ class Invitation extends Model
         $text = $greeting.' Nos casamos 🎉 Esta es tu invitación: '.$this->publicUrl();
 
         return 'https://wa.me/?text='.rawurlencode($text);
+    }
+
+    /**
+     * Texto completo de la invitación para copiar y pegar en WhatsApp:
+     * saludo con los nombres de los invitados, lugares reservados y los
+     * links de su invitación y del sitio web.
+     */
+    public function shareMessage(): string
+    {
+        $names = $this->members->pluck('full_name')->filter()->values();
+
+        // Saludo: los nombres de los invitados ("Ana Pérez y Luis García") o,
+        // si la invitación aún no tiene miembros, el nombre de la invitación.
+        $greeting = $names->isNotEmpty() ? $names->implode(' y ') : $this->display_name;
+
+        // Lugares reservados: 1 o 2 según los invitados de la pareja.
+        $places = max($names->count(), 1);
+        $placesLabel = $places === 1 ? '1 lugar' : "{$places} lugares";
+
+        return implode("\n\n", [
+            "¡Hola, {$greeting}!",
+            "Con enorme cariño queremos invitarles a celebrar el día de nuestra boda. Para nosotros es fundamental compartir este momento tan especial rodeados de las personas que más queremos, por lo que hemos reservado {$placesLabel} especialmente a su nombre.",
+            "Aunque amamos a los más pequeños, hemos decidido que nuestra boda sea un evento exclusivo para adultos. ¡Agradecemos su comprensión para disfrutar todos juntos de una gran noche!",
+            $this->publicUrl(),
+            "En el siguiente enlace encontrarán nuestro sitio web, donde podrán consultar todos los detalles del evento, como el código de vestimenta, el itinerario, mesa asignada, preguntas frecuentes y el espacio para confirmar su asistencia:",
+            route('home'),
+            "¡Estamos muy ilusionados de verlos y celebrar juntos!",
+            "Con mucho cariño,",
+            WeddingSetting::coupleFirstNames(),
+        ]);
+    }
+
+    /**
+     * Accessor del texto para WhatsApp: share_message.
+     */
+    public function getShareMessageAttribute(): string
+    {
+        return $this->shareMessage();
     }
 }

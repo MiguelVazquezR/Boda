@@ -90,6 +90,8 @@ Route::middleware([
         Route::post('/invitados', [AdminGuestController::class, 'store'])->name('guests.store');
         Route::post('/invitados/importar', [AdminGuestController::class, 'import'])->name('guests.import');
         Route::put('/invitados/{guest}', [AdminGuestController::class, 'update'])->name('guests.update');
+        // Edición rápida de una celda (origen, celular, grupo o mesa) desde la tabla
+        Route::patch('/invitados/{guest}/celda', [AdminGuestController::class, 'updateCell'])->name('guests.cell');
         Route::delete('/invitados/{guest}', [AdminGuestController::class, 'destroy'])->name('guests.destroy');
 
         // Grupos de invitados

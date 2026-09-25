@@ -16,6 +16,8 @@ const props = defineProps({
     settings: Object,
     // URL efectiva del sitio de Canva (BD o config/wedding.php)
     canvaUrl: String,
+    // Link efectivo de la mesa de regalos (BD o config/wedding.php)
+    giftRegistryUrl: String,
 });
 
 // Link fijo que debe usar el botón «Confirmar asistencia» dentro de Canva:
@@ -74,6 +76,8 @@ const form = useForm({
     rsvp_deadline: toDateInput(props.settings?.rsvp_deadline),
     // Invitación digital (sitio de Canva con música y transiciones)
     canva_url: props.settings?.canva_url || props.canvaUrl || '',
+    // Mesa de regalos (lista de sugerencias en Amazon)
+    gift_registry_url: props.settings?.gift_registry_url || props.giftRegistryUrl || '',
 });
 
 // Previews
@@ -571,6 +575,28 @@ function submit() {
                                 <code class="bg-white border border-tinta/10 px-1.5 py-0.5 rounded text-tinta">{{ rsvpUrl }}</code>.
                                 Así el invitado verá su confirmación con su nombre ya cargado (el sistema recuerda quién
                                 abrió la invitación). Si alguien entra sin link personal, siempre podrá buscar su nombre.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══════════ MESA DE REGALOS ═══════════ -->
+                <div class="bg-white rounded-2xl border border-tinta/10 shadow-sm overflow-hidden">
+                    <div class="px-6 py-5 border-b border-tinta/5">
+                        <h3 class="font-slab text-lg text-tinta">Mesa de regalos</h3>
+                        <p class="text-tinta/50 text-sm mt-1">
+                            Link de la lista de sugerencias (Amazon) que se muestra en la sección
+                            «Mesa de Regalos» de la página.
+                        </p>
+                    </div>
+                    <div class="p-6">
+                        <div class="max-w-xl">
+                            <InputLabel value="URL de la lista de regalos" class="mb-1" />
+                            <TextInput v-model="form.gift_registry_url" type="url" class="w-full"
+                                placeholder="https://www.amazon.com.mx/hz/wishlist/ls/..." />
+                            <InputError :message="form.errors.gift_registry_url" class="mt-1" />
+                            <p class="text-xs text-tinta/40 mt-2">
+                                Si lo dejas vacío se usa el link predeterminado del sitio.
                             </p>
                         </div>
                     </div>

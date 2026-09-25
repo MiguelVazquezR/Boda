@@ -21,6 +21,9 @@ const props = defineProps({
     invitation: Object,
     // Abrir la página directamente en la sección de confirmación
     focusRsvp: Boolean,
+    // Link de la mesa de regalos (lista de sugerencias en Amazon).
+    // Editable desde el panel de administración.
+    giftRegistryUrl: String,
 });
 
 // ── Ilustración predeterminada del itinerario según el título ──
@@ -366,6 +369,7 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                     <button @click="scrollTo('evento')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Evento</button>
                     <button @click="scrollTo('tiempos')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Tiempos</button>
                     <button @click="scrollTo('dresscode')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Dress Code</button>
+                    <button @click="scrollTo('regalos')" class="hidden lg:inline-block px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Regalos</button>
                     <button @click="scrollTo('rsvp')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">RSVP</button>
                     <button @click="scrollTo('mesas')" class="hidden lg:inline-block px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">Mi Mesa</button>
                     <button @click="scrollTo('faq')" class="px-4 py-2 rounded-full text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30 transition-all">FAQ</button>
@@ -388,6 +392,7 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                     <button @click="scrollTo('evento')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">El Evento</button>
                     <button @click="scrollTo('tiempos')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Tiempos</button>
                     <button @click="scrollTo('dresscode')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Dress Code</button>
+                    <button @click="scrollTo('regalos')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Mesa de Regalos</button>
                     <button @click="scrollTo('rsvp')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Confirmar Asistencia</button>
                     <button @click="scrollTo('mesas')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Encuentra tu Mesa</button>
                     <button @click="scrollTo('faq')" class="text-left px-4 py-3 rounded-lg text-tinta/80 hover:text-tinta hover:bg-niebla-dark/30">Preguntas Frecuentes</button>
@@ -718,6 +723,37 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                             <DressCodeCarousel v-else :items="menItems" />
                         </div>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════════════════ MESA DE REGALOS ════════════════ -->
+        <section v-if="giftRegistryUrl" id="regalos" class="py-24 md:py-32 px-4 bg-gradient-to-br from-primary/10 via-niebla to-secondary/10">
+            <div class="max-w-3xl mx-auto">
+                <div class="text-center mb-16">
+                    <div class="flex items-center justify-center gap-4 mb-4">
+                        <div class="h-px w-10 bg-primary"></div>
+                        <span class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Mesa de Regalos</span>
+                        <div class="h-px w-10 bg-primary"></div>
+                    </div>
+                    <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">El Mejor Regalo Eres Tú</h2>
+                </div>
+
+                <div class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-tinta/10 shadow-lg shadow-tinta/5 text-center animate-slide-up">
+                    <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                        <GiftIcon class="w-8 h-8 text-primary" />
+                    </div>
+                    <p class="text-tinta/80 text-lg leading-relaxed max-w-2xl mx-auto">
+                        Tu presencia en nuestro gran día es el regalo más bonito que podríamos recibir.
+                        Si además te nace consentirnos, preparamos una lista con algunas sugerencias
+                        que nos acompañarán a construir nuestro nuevo hogar.
+                    </p>
+                    <a :href="giftRegistryUrl" target="_blank" rel="noopener"
+                        class="mt-8 inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-slab font-bold px-8 py-4 rounded-full text-lg transition-all duration-300 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-105 active:scale-95">
+                        <GiftIcon class="w-5 h-5" />
+                        Ver Mesa de Regalos
+                    </a>
+                    <p class="text-tinta/40 text-sm mt-4">Lista de sugerencias en Amazon 🎁</p>
                 </div>
             </div>
         </section>

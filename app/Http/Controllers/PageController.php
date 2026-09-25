@@ -40,9 +40,10 @@ class PageController extends Controller
     private function props(Request $request, bool $focusRsvp): array
     {
         $invitation = $this->resolveInvitation($request);
+        $settings = WeddingSetting::current();
 
         return [
-            'settings' => WeddingSetting::current(),
+            'settings' => $settings,
             'faqs' => Faq::published()->get(),
             'galleryPhotos' => GalleryPhoto::approved()->latest()->get(),
             'scheduleItems' => ScheduleItem::active()->ordered()->get(),
@@ -55,6 +56,9 @@ class PageController extends Controller
             // cuando el invitado abrió su invitación y pasó a Canva.
             'invitation' => $invitation ? $this->invitationPayload($invitation) : null,
             'focusRsvp' => $focusRsvp,
+            // Link de la mesa de regalos (lista de sugerencias). Editable desde el
+            // panel; si está vacío se usa config/wedding.php.
+            'giftRegistryUrl' => $settings->giftRegistryUrl(),
         ];
     }
 
