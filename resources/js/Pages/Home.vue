@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useForm, router, Head } from '@inertiajs/vue3';
 import axios from 'axios';
-import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon, BanknotesIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/vue/24/outline';
+import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon, BanknotesIcon, ClipboardDocumentIcon, CheckIcon, CalendarDaysIcon } from '@heroicons/vue/24/outline';
 import DressCodeGrid from '@/Components/DressCode/DressCodeGrid.vue';
 import DressCodeCarousel from '@/Components/DressCode/DressCodeCarousel.vue';
 import { parseEventDate, formatEventDate as formatDate, formatEventTime as formatTime } from '@/Composables/useEventDate';
@@ -15,6 +15,9 @@ const props = defineProps({
     scheduleItems: Array,
     // true cuando ya existe al menos un invitado con mesa asignada en la BD
     tablesReady: Boolean,
+    // Fecha (ISO) en la que se publican las mesas; antes de esa fecha la
+    // sección muestra un aviso en lugar del buscador. null = sin aviso.
+    tablesRevealDate: String,
     // Invitación digital reconocida: llega por el link personal del invitado
     // (/i/{token}/confirmar) o por la cookie que se guardó al abrir su invitación
     // desde Canva. Cuando existe, el RSVP aparece con los nombres ya cargados.
@@ -345,8 +348,24 @@ async function copyBankClabe() {
 }
 
 // ── Encuentra tu Mesa ────────────────────────────────────────────
-// Las mesas se asignan en el panel admin ~15 días antes del evento. La sección se
-// activa automáticamente en cuanto hay al menos un invitado con mesa registrada.
+// Las mesas se asignan en el panel admin después de revisar las confirmaciones
+// de asistencia. La sección se activa automáticamente en cuanto hay al menos un
+// invitado con mesa registrada; además, si el panel configura una fecha de
+// publicación, hasta que esa fecha llegue se muestra un aviso en lugar del buscador.
+const tablesRevealDateParsed = computed(() => parseEventDate(props.tablesRevealDate));
+
+// true mientras la fecha de publicación aún no llega (el buscador está oculto).
+const tablesLocked = computed(() => {
+    if (!tablesRevealDateParsed.value) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return today < tablesRevealDateParsed.value;
+});
+
+const tablesRevealFormatted = computed(() => formatDate(props.tablesRevealDate, ''));
+
 const tableQuery = ref('');
 const tableResults = ref([]);
 const tableLoading = ref(false);
@@ -1084,12 +1103,37 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                         <div class="h-px w-10 bg-primary"></div>
                     </div>
                     <h2 class="font-script text-4xl sm:text-5xl md:text-6xl text-tinta">Encuentra tu Mesa</h2>
-                    <p class="text-tinta/60 mt-4">Busca tu nombre y te diremos en qué mesa te esperamos y quiénes te acompañan.</p>
+                    <p class="text-tinta/60 mt-4">
+                        {{ tablesLocked
+                            ? 'Las mesas se publican después de revisar las confirmaciones de asistencia.'
+                            : 'Busca tu nombre y te diremos en qué mesa te esperamos y quiénes te acompañan.' }}
+                    </p>
                 </div>
 
                 <div class="bg-white/80 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-tinta/10 shadow-lg shadow-tinta/5">
-                    <!-- Aún no hay mesas asignadas -->
-                    <div v-if="!tablesReady" class="text-center">
+                    <!-- La fecha de publicación de las mesas aún no llega: se muestra
+                         un aviso en lugar del buscador, porque las mesas se distribuyen
+                         después de revisar las confirmaciones de asistencia. -->
+                    <div v-if="tablesLocked" class="text-center">
+                        <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <CalendarDaysIcon class="w-8 h-8 text-primary" />
+                        </div>
+                        <h3 class="font-slab text-xl text-tinta mb-2">La asignación de mesas se encuentra actualmente en proceso. 🍽️</h3>
+                        <p class="text-tinta/60">
+                            Una vez que contemos con la confirmación de todos los invitados, organizaremos los lugares. Podrás consultar tu mesa asignada
+                        </p>
+                        <p class="text-tinta/70 mt-5">
+                            a partir del <span class="font-slab font-bold text-primary">{{ tablesRevealFormatted }}</span>
+                        </p>
+                        <button @click="scrollTo('rsvp')"
+                            class="mt-6 inline-flex items-center gap-2 text-primary hover:text-primary-dark text-sm font-medium transition-colors">
+                            Te agradecemos confirmar tu asistencia con anticipación.
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- La fecha ya llegó pero aún no hay mesas asignadas -->
+                    <div v-else-if="!tablesReady" class="text-center">
                         <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                             <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M6 6v12m12-12v12M4 18h16M9 10h6" />
@@ -1097,8 +1141,7 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                         </div>
                         <h3 class="font-slab text-xl text-tinta mb-2">Muy pronto</h3>
                         <p class="text-tinta/60">
-                            Estamos acomodando a cada invitado en su mesa. Podrás consultarla aquí
-                            aproximadamente 15 días antes del evento.
+                            Estamos acomodando a cada invitado en su mesa. Vuelve en unos días para consultarla aquí.
                         </p>
                     </div>
 
