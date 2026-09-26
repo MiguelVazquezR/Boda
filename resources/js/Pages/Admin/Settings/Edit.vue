@@ -76,6 +76,8 @@ const form = useForm({
     dress_code_men_other_desc: props.settings?.dress_code_men_other_desc ?? '',
     // General
     rsvp_deadline: toDateInput(props.settings?.rsvp_deadline),
+    // Fecha de publicación de «Encuentra tu mesa» (hasta esa fecha se muestra el aviso)
+    tables_reveal_date: toDateInput(props.settings?.tables_reveal_date),
     // Invitación digital (sitio de Canva con música y transiciones)
     canva_url: props.settings?.canva_url || props.canvaUrl || '',
     // Mesa de regalos (lista de sugerencias en Amazon)
@@ -643,12 +645,23 @@ function submit() {
                     <div class="px-6 py-5 border-b border-tinta/5">
                         <h3 class="font-slab text-lg text-tinta">Confirmación de Asistencia</h3>
                     </div>
-                    <div class="p-6">
+                    <div class="p-6 space-y-6">
                         <div class="max-w-sm">
                             <InputLabel value="Fecha límite para confirmar asistencia" class="mb-1" />
                             <input type="date" v-model="form.rsvp_deadline"
                                 class="w-full rounded-xl border-tinta/20 focus:border-primary focus:ring-primary/20 text-tinta" />
                             <InputError :message="form.errors.rsvp_deadline" class="mt-1" />
+                        </div>
+                        <div class="max-w-sm">
+                            <InputLabel value="Fecha de publicación de «Encuentra tu mesa»" class="mb-1" />
+                            <input type="date" v-model="form.tables_reveal_date"
+                                class="w-full rounded-xl border-tinta/20 focus:border-primary focus:ring-primary/20 text-tinta" />
+                            <InputError :message="form.errors.tables_reveal_date" class="mt-1" />
+                            <p class="text-xs text-tinta/40 mt-2">
+                                Hasta esta fecha, la sección muestra el aviso «Vuelve el …» en lugar del buscador
+                                (las mesas se distribuyen después de las confirmaciones). Déjala vacía para no
+                                mostrarlo.
+                            </p>
                         </div>
                     </div>
                 </div>

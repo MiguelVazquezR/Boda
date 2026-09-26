@@ -53,6 +53,7 @@ class WeddingSetting extends Model
         'dress_code_men_other',
         'dress_code_men_other_desc',
         'rsvp_deadline',
+        'tables_reveal_date',
         'canva_url',
         'gift_registry_url',
         'gift_bank_name',
@@ -88,6 +89,7 @@ class WeddingSetting extends Model
             'ceremony_datetime' => 'datetime',
             'celebration_datetime' => 'datetime',
             'rsvp_deadline' => 'date',
+            'tables_reveal_date' => 'date',
         ];
     }
 

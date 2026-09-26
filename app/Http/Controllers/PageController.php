@@ -52,6 +52,10 @@ class PageController extends Controller
             'tablesReady' => Guest::whereNotNull('table_group')
                 ->where('table_group', '<>', '')
                 ->exists(),
+            // Fecha en la que se publican las mesas. Antes de esa fecha la sección
+            // muestra un aviso («vuelve el …») en lugar del buscador, porque las
+            // mesas se distribuyen después de revisar las confirmaciones.
+            'tablesRevealDate' => $settings->tables_reveal_date?->format('Y-m-d\TH:i:sP'),
             // Invitación reconocida: por link directo o por la cookie que se guardó
             // cuando el invitado abrió su invitación y pasó a Canva.
             'invitation' => $invitation ? $this->invitationPayload($invitation) : null,
