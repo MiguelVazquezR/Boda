@@ -45,7 +45,10 @@ class PageController extends Controller
         return [
             'settings' => $settings,
             'faqs' => Faq::published()->get(),
-            'galleryPhotos' => GalleryPhoto::approved()->latest()->get(),
+            'galleryPhotos' => GalleryPhoto::approved()->latest()->limit(4)->get(),
+            'galleryPhotoCount' => GalleryPhoto::approved()->count(),
+            // false cuando el panel tiene activada la publicación sin moderación.
+            'galleryRequiresApproval' => ! $settings->gallery_auto_approve,
             'scheduleItems' => ScheduleItem::active()->ordered()->get(),
             // La sección "Encuentra tu mesa" se activa automáticamente cuando ya
             // existe al menos un invitado con mesa registrada en la base de datos.
@@ -113,4 +116,3 @@ class PageController extends Controller
         ];
     }
 }
-

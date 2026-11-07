@@ -14,7 +14,32 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class GuestTable extends Model
 {
-    protected $fillable = ['name'];
+    protected $fillable = [
+        'name',
+        'number',
+        'shape',
+        'capacity',
+        'x',
+        'y',
+        'width',
+        'height',
+        'rotation',
+        'seat_distribution',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'number' => 'integer',
+            'capacity' => 'integer',
+            'x' => 'integer',
+            'y' => 'integer',
+            'width' => 'integer',
+            'height' => 'integer',
+            'rotation' => 'integer',
+            'seat_distribution' => 'array',
+        ];
+    }
 
     /**
      * Invitados asignados a esta mesa (se enlazan por nombre, no por id).
