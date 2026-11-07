@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useForm, router, Head } from '@inertiajs/vue3';
+import { useForm, router, Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon, BanknotesIcon, ClipboardDocumentIcon, CheckIcon, CalendarDaysIcon } from '@heroicons/vue/24/outline';
 import DressCodeGrid from '@/Components/DressCode/DressCodeGrid.vue';
@@ -12,6 +12,9 @@ const props = defineProps({
     settings: Object,
     faqs: Array,
     galleryPhotos: Array,
+    galleryPhotoCount: Number,
+    // false cuando el panel publica las fotos de inmediato (sin moderación)
+    galleryRequiresApproval: Boolean,
     scheduleItems: Array,
     // true cuando ya existe al menos un invitado con mesa asignada en la BD
     tablesReady: Boolean,
@@ -276,26 +279,53 @@ function toggleFaq(id) { activeFaq.value = activeFaq.value === id ? null : id; }
 
 // ── Gallery ──────────────────────────────────────────────────────
 const galleryForm = useForm({
-    image: null,
+    images: [],
     uploader_name: '',
 });
-const galleryPreview = ref(null);
+const galleryFiles = ref([]);
 const gallerySuccess = ref(false);
+const gallerySuccessCount = ref(0);
+const galleryUploadError = computed(() => {
+    const error = Object.entries(galleryForm.errors)
+        .find(([field]) => field === 'images' || field.startsWith('images.'));
+
+    return error?.[1] ?? null;
+});
 
 function onGalleryFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    galleryForm.image = file;
-    galleryPreview.value = URL.createObjectURL(file);
+    setGalleryFiles(Array.from(e.target.files ?? []));
+    e.target.value = '';
+}
+
+function setGalleryFiles(files) {
+    galleryFiles.value.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+    const invalidFiles = files.filter(file => !file.type.startsWith('image/'));
+    galleryFiles.value = files
+        .filter(file => file.type.startsWith('image/'))
+        .map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+    galleryForm.images = galleryFiles.value.map(({ file }) => file);
+    galleryForm.clearErrors();
+    if (invalidFiles.length) {
+        galleryForm.setError('images', 'Selecciona solo archivos de imagen.');
+    }
+}
+
+function clearGalleryFiles() {
+    galleryFiles.value.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+    galleryFiles.value = [];
+    galleryForm.images = [];
 }
 
 function submitGallery() {
-    galleryForm.post('/galeria', {
+    if (!galleryFiles.value.length || galleryUploadError.value) return;
+
+    gallerySuccessCount.value = galleryFiles.value.length;
+    galleryForm.post(route('gallery.store'), {
         preserveScroll: true,
         forceFormData: true,
         onSuccess: () => {
             galleryForm.reset();
-            galleryPreview.value = null;
+            clearGalleryFiles();
             gallerySuccess.value = true;
             setTimeout(() => { gallerySuccess.value = false; }, 5000);
         },
@@ -303,9 +333,20 @@ function submitGallery() {
 }
 
 // ── Lightbox ─────────────────────────────────────────────────────
-const lightboxImage = ref(null);
-function openLightbox(url) { lightboxImage.value = url; }
-function closeLightbox() { lightboxImage.value = null; }
+const lightboxIndex = ref(null);
+const lightboxImage = computed(() => lightboxIndex.value === null
+    ? null
+    : `/storage/${props.galleryPhotos[lightboxIndex.value].image_path}`);
+function openLightbox(index) { lightboxIndex.value = index; }
+function showNextPhoto() {
+    if (lightboxIndex.value === null) return;
+    lightboxIndex.value = (lightboxIndex.value + 1) % props.galleryPhotos.length;
+}
+function showPreviousPhoto() {
+    if (lightboxIndex.value === null) return;
+    lightboxIndex.value = (lightboxIndex.value - 1 + props.galleryPhotos.length) % props.galleryPhotos.length;
+}
+function closeLightbox() { lightboxIndex.value = null; }
 
 // ── WhatsApp fallback ────────────────────────────────────────────
 const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20lista%20de%20invitados%20de%20la%20boda.%20%C2%BFNos%20pueden%20ayudar%3F';
@@ -1301,21 +1342,32 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                             <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                         </div>
                         <h3 class="font-slab text-xl text-tinta mb-2">📸 Sube tus fotos</h3>
-                        <p class="text-tinta/50 text-sm mb-6">Las fotos serán revisadas antes de publicarse</p>
+                        <p class="text-tinta/50 text-sm mb-6">
+                            {{ galleryRequiresApproval
+                                ? 'Las fotos serán revisadas antes de publicarse'
+                                : 'Tus fotos se publicarán al instante en la galería' }}
+                        </p>
 
                         <!-- Drag & Drop + Input -->
                         <label
                             class="block border-2 border-dashed border-tinta/20 hover:border-primary/50 rounded-2xl p-8 md:p-10 cursor-pointer transition-all bg-niebla/50 hover:bg-niebla-dark/30"
                             @dragover.prevent
-                            @drop.prevent="(e) => { if (e.dataTransfer.files[0]) { galleryForm.image = e.dataTransfer.files[0]; galleryPreview = URL.createObjectURL(e.dataTransfer.files[0]); } }"
+                            @drop.prevent="setGalleryFiles(Array.from($event.dataTransfer.files))"
                         >
-                            <input type="file" accept="image/*" class="hidden" @change="onGalleryFile" />
-                            <div v-if="!galleryPreview">
+                            <input type="file" accept="image/*" multiple class="hidden" @change="onGalleryFile" />
+                            <div v-if="!galleryFiles.length">
                                 <svg class="w-10 h-10 text-tinta/30 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                                <span class="text-tinta/50 text-sm">Arrastra tu foto aquí o haz clic para seleccionar</span>
+                                <span class="text-tinta/50 text-sm">Arrastra tus fotos aquí o haz clic para seleccionar varias</span>
                             </div>
-                            <img v-else :src="galleryPreview" class="max-h-48 mx-auto rounded-xl shadow-md" />
+                            <div v-else class="flex flex-wrap justify-center gap-3">
+                                <img v-for="({ previewUrl, file }, index) in galleryFiles" :key="`${file.name}-${index}`"
+                                    :src="previewUrl" :alt="file.name" class="w-24 h-24 object-cover rounded-xl shadow-md" />
+                                <p class="w-full text-tinta/60 text-sm mt-2">{{ galleryFiles.length }} foto(s) seleccionada(s)</p>
+                            </div>
                         </label>
+                        <p v-if="galleryUploadError" class="text-red-600 text-sm mt-2">
+                            {{ galleryUploadError }}
+                        </p>
 
                         <!-- Uploader name -->
                         <div class="mt-4">
@@ -1326,39 +1378,48 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                         <!-- Upload button -->
                         <button
                             @click="submitGallery"
-                            :disabled="!galleryForm.image || galleryForm.processing"
+                            :disabled="!galleryFiles.length || galleryUploadError || galleryForm.processing"
                             class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primary-dark disabled:bg-tinta/20 disabled:text-tinta/30 text-white font-slab font-bold px-8 py-3 rounded-full transition-all duration-300 shadow-lg shadow-primary/20 hover:shadow-xl disabled:shadow-none"
                         >
                             <span v-if="galleryForm.processing">
                                 <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                                 Subiendo...
                             </span>
-                            <span v-else>Subir Foto</span>
+                            <span v-else>Subir {{ galleryFiles.length || '' }} foto(s)</span>
                         </button>
 
                         <!-- Success -->
                         <div v-if="gallerySuccess" class="mt-4 text-secondary animate-fade-in bg-secondary/10 rounded-xl py-3 px-4 inline-block">
-                            ✅ ¡Foto subida con éxito! Se mostrará al ser aprobada.
+                            ✅ ¡{{ gallerySuccessCount }} foto(s) subida(s) con éxito!
+                            {{ galleryRequiresApproval ? 'Se mostrarán al ser aprobadas.' : 'Ya aparecen en la galería.' }}
                         </div>
                     </div>
                 </div>
 
                 <!-- Gallery grid -->
-                <div v-if="galleryPhotos && galleryPhotos.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
+                <div v-if="galleryPhotos && galleryPhotos.length > 0" class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                     <div
-                        v-for="photo in galleryPhotos" :key="photo.id"
-                        @click="openLightbox('/storage/' + photo.image_path)"
-                        class="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-niebla"
+                        v-for="(photo, index) in galleryPhotos" :key="photo.id"
+                        @click="openLightbox(index)"
+                        class="relative aspect-square w-full rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-niebla"
                     >
-                        <img :src="'/storage/' + photo.image_path" alt="Foto de boda" class="w-full h-full object-contain" />
+                        <img :src="'/storage/' + photo.image_path" alt="Foto de boda" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                         <div class="absolute inset-0 bg-tinta/0 group-hover:bg-tinta/20 transition-all duration-300 flex items-end p-3">
                             <span v-if="photo.uploader_name" class="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300">Por: {{ photo.uploader_name }}</span>
                         </div>
                     </div>
                 </div>
 
+                <div v-if="galleryPhotoCount > 0" class="text-center mt-6">
+                    <Link :href="route('gallery.show')"
+                        class="inline-flex items-center gap-2 rounded-full bg-primary hover:bg-primary-dark px-7 py-3 text-white font-medium shadow-md transition-colors">
+                        Ver toda la galería ({{ galleryPhotoCount }})
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
+                </div>
+
                 <!-- Empty state before wedding -->
-                <div v-else class="text-center text-tinta/40 py-10">
+                <div v-if="!galleryPhotoCount" class="text-center text-tinta/40 py-10">
                     <svg class="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     <p class="font-slab">La galería se activará el día del evento</p>
                     <p class="text-sm mt-1">¡Vuelve para compartir tus momentos favoritos!</p>
@@ -1376,7 +1437,17 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                 <button @click="closeLightbox" class="absolute top-6 right-6 text-white/60 hover:text-white transition-colors">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
+                <button v-if="galleryPhotos.length > 1" @click.stop="showPreviousPhoto"
+                    aria-label="Ver foto anterior"
+                    class="absolute left-3 md:left-8 text-white/80 hover:text-white p-3 rounded-full bg-black/20 hover:bg-black/40 transition-colors">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </button>
                 <img :src="lightboxImage" alt="Foto ampliada" class="max-w-full max-h-[90vh] rounded-2xl shadow-2xl" @click.stop />
+                <button v-if="galleryPhotos.length > 1" @click.stop="showNextPhoto"
+                    aria-label="Ver siguiente foto"
+                    class="absolute right-3 md:right-8 text-white/80 hover:text-white p-3 rounded-full bg-black/20 hover:bg-black/40 transition-colors">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
             </div>
         </Teleport>
 

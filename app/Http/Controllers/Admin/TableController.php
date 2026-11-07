@@ -8,66 +8,10 @@ use App\Http\Requests\StoreGuestTableRequest;
 use App\Http\Requests\UpdateGuestTableRequest;
 use App\Models\Guest;
 use App\Models\GuestTable;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
 
 class TableController extends Controller
 {
-    /**
-     * Panel de asignación de mesas.
-     *
-     * Muestra todos los invitados con su mesa actual (o "sin asignar") y un
-     * resumen por mesa, para poder repartir las mesas unos días antes del evento.
-     */
-    public function index(Request $request)
-    {
-        $guests = Guest::with('group:id,name')
-            ->orderBy('full_name')
-            ->get(['id', 'full_name', 'guest_group_id', 'rsvp_status', 'table_group', 'city', 'origin']);
-
-        $assigned = $guests->filter(fn (Guest $guest) => filled($guest->table_group));
-        $byTable = $assigned->groupBy('table_group');
-
-        // Catálogo de mesas: incluye las mesas vacías creadas desde el gestor.
-        $catalog = GuestTable::get(['id', 'name']);
-
-        // Autocorrección: registra las mesas que ya usan los invitados pero que
-        // todavía no están en el catálogo (por ejemplo, mesas heredadas).
-        $byTable->keys()->each(function ($name) use ($catalog) {
-            $name = (string) $name;
-
-            if (! $catalog->contains('name', $name)) {
-                $catalog->push(GuestTable::create(['name' => $name]));
-            }
-        });
-
-        $tables = $catalog
-            ->map(function (GuestTable $table) use ($byTable) {
-                $group = $byTable->get($table->name, collect());
-
-                return [
-                    'id' => $table->id,
-                    'name' => $table->name,
-                    'total' => $group->count(),
-                    'confirmed' => $group->where('rsvp_status', 'confirmed')->count(),
-                    'guests' => $group->pluck('full_name')->values(),
-                ];
-            })
-            ->sortBy(fn (array $table) => $table['name'], SORT_NATURAL | SORT_FLAG_CASE)
-            ->values();
-
-        return Inertia::render('Admin/Tables/Index', [
-            'guests' => $guests,
-            'tables' => $tables,
-            'stats' => [
-                'tables' => $tables->count(),
-                'assigned' => $assigned->count(),
-                'unassigned' => $guests->count() - $assigned->count(),
-            ],
-        ]);
-    }
-
     /**
      * Asigna la misma mesa a uno o varios invitados (o quita la mesa si va vacía).
      *

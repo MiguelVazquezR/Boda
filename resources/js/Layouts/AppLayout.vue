@@ -61,8 +61,8 @@ const logout = () => {
                                     <NavLink :href="route('admin.guests.index')" :active="route().current('admin.guests.*')">
                                         Invitados
                                     </NavLink>
-                                    <NavLink :href="route('admin.tables.index')" :active="route().current('admin.tables.*')">
-                                        Mesas
+                                    <NavLink :href="route('admin.floorplan.index')" :active="route().current('admin.floorplan.*') || route().current('admin.tables.*')">
+                                        Plano de salón
                                     </NavLink>
                                     <NavLink :href="route('admin.faqs.index')" :active="route().current('admin.faqs.*')">
                                         Preguntas Frecuentes
@@ -226,8 +226,8 @@ const logout = () => {
                             <ResponsiveNavLink :href="route('admin.guests.index')" :active="route().current('admin.guests.*')">
                                 Invitados
                             </ResponsiveNavLink>
-                            <ResponsiveNavLink :href="route('admin.tables.index')" :active="route().current('admin.tables.*')">
-                                Mesas
+                            <ResponsiveNavLink :href="route('admin.floorplan.index')" :active="route().current('admin.floorplan.*') || route().current('admin.tables.*')">
+                                Plano de salón
                             </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('admin.faqs.index')" :active="route().current('admin.faqs.*')">
                                 Preguntas Frecuentes

@@ -25,6 +25,7 @@ class Guest extends Model
         'rsvp_message',
         'rsvp_responded_at',
         'table_group',
+        'seat_number',
     ];
 
     protected function casts(): array
@@ -33,6 +34,7 @@ class Guest extends Model
             'age' => 'integer',
             'guest_group_id' => 'integer',
             'rsvp_responded_at' => 'datetime',
+            'seat_number' => 'integer',
         ];
     }
 

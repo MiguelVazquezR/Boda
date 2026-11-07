@@ -54,6 +54,8 @@ class WeddingSetting extends Model
         'dress_code_men_other_desc',
         'rsvp_deadline',
         'tables_reveal_date',
+        'gallery_auto_approve',
+        'venue_layout',
         'canva_url',
         'gift_registry_url',
         'gift_bank_name',
@@ -90,6 +92,8 @@ class WeddingSetting extends Model
             'celebration_datetime' => 'datetime',
             'rsvp_deadline' => 'date',
             'tables_reveal_date' => 'date',
+            'gallery_auto_approve' => 'boolean',
+            'venue_layout' => 'array',
         ];
     }
 
@@ -148,6 +152,24 @@ class WeddingSetting extends Model
             'clabe' => (string) ($this->gift_bank_clabe ?? ''),
             'holder' => (string) ($this->gift_bank_holder ?? ''),
         ];
+    }
+
+    /**
+     * Configuración del salón para el diseñador de mesas.
+     * Las medidas están en píxeles del plano (100 px = 1 m).
+     */
+    public function venueLayout(): array
+    {
+        return array_merge([
+            'title' => 'Salón Principal — Recepción',
+            'width' => 1500,
+            'height' => 3000,
+            'gridSize' => 20,
+            'showGrid' => true,
+            'snapToGrid' => false,
+            'shape' => 'rect',
+            'sections' => [],
+        ], (array) ($this->venue_layout ?? []));
     }
 
     /**
