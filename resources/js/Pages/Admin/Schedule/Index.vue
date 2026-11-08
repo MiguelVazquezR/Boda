@@ -74,10 +74,15 @@ function save() {
             showModal.value = false;
             resetFormFields();
         },
+        // El transform solo aplica a esta petición.
+        onFinish: () => form.transform((data) => data),
     };
 
     if (editingItem.value) {
-        form.put(route('admin.schedule.update', editingItem.value.id), options);
+        // PHP no lee los campos de un PUT multipart, así que la edición se envía
+        // como POST con _method=put (igual que hacen los formularios con archivos).
+        form.transform((data) => ({ ...data, _method: 'put' }));
+        form.post(route('admin.schedule.update', editingItem.value.id), options);
     } else {
         form.post(route('admin.schedule.store'), options);
     }

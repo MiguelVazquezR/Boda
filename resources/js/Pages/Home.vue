@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useForm, router, Head } from '@inertiajs/vue3';
+import { useForm, router, Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon, BanknotesIcon, ClipboardDocumentIcon, CheckIcon, CalendarDaysIcon } from '@heroicons/vue/24/outline';
 import DressCodeGrid from '@/Components/DressCode/DressCodeGrid.vue';
 import DressCodeCarousel from '@/Components/DressCode/DressCodeCarousel.vue';
+import SeatPlanViewer from '@/Components/FloorPlan/SeatPlanViewer.vue';
 import { parseEventDate, formatEventDate as formatDate, formatEventTime as formatTime } from '@/Composables/useEventDate';
 
 // ── Props ────────────────────────────────────────────────────────
@@ -12,6 +13,9 @@ const props = defineProps({
     settings: Object,
     faqs: Array,
     galleryPhotos: Array,
+    galleryPhotoCount: Number,
+    // false cuando el panel publica las fotos de inmediato (sin moderación)
+    galleryRequiresApproval: Boolean,
     scheduleItems: Array,
     // true cuando ya existe al menos un invitado con mesa asignada en la BD
     tablesReady: Boolean,
@@ -276,26 +280,53 @@ function toggleFaq(id) { activeFaq.value = activeFaq.value === id ? null : id; }
 
 // ── Gallery ──────────────────────────────────────────────────────
 const galleryForm = useForm({
-    image: null,
+    images: [],
     uploader_name: '',
 });
-const galleryPreview = ref(null);
+const galleryFiles = ref([]);
 const gallerySuccess = ref(false);
+const gallerySuccessCount = ref(0);
+const galleryUploadError = computed(() => {
+    const error = Object.entries(galleryForm.errors)
+        .find(([field]) => field === 'images' || field.startsWith('images.'));
+
+    return error?.[1] ?? null;
+});
 
 function onGalleryFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    galleryForm.image = file;
-    galleryPreview.value = URL.createObjectURL(file);
+    setGalleryFiles(Array.from(e.target.files ?? []));
+    e.target.value = '';
+}
+
+function setGalleryFiles(files) {
+    galleryFiles.value.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+    const invalidFiles = files.filter(file => !file.type.startsWith('image/'));
+    galleryFiles.value = files
+        .filter(file => file.type.startsWith('image/'))
+        .map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+    galleryForm.images = galleryFiles.value.map(({ file }) => file);
+    galleryForm.clearErrors();
+    if (invalidFiles.length) {
+        galleryForm.setError('images', 'Selecciona solo archivos de imagen.');
+    }
+}
+
+function clearGalleryFiles() {
+    galleryFiles.value.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+    galleryFiles.value = [];
+    galleryForm.images = [];
 }
 
 function submitGallery() {
-    galleryForm.post('/galeria', {
+    if (!galleryFiles.value.length || galleryUploadError.value) return;
+
+    gallerySuccessCount.value = galleryFiles.value.length;
+    galleryForm.post(route('gallery.store'), {
         preserveScroll: true,
         forceFormData: true,
         onSuccess: () => {
             galleryForm.reset();
-            galleryPreview.value = null;
+            clearGalleryFiles();
             gallerySuccess.value = true;
             setTimeout(() => { gallerySuccess.value = false; }, 5000);
         },
@@ -303,9 +334,20 @@ function submitGallery() {
 }
 
 // ── Lightbox ─────────────────────────────────────────────────────
-const lightboxImage = ref(null);
-function openLightbox(url) { lightboxImage.value = url; }
-function closeLightbox() { lightboxImage.value = null; }
+const lightboxIndex = ref(null);
+const lightboxImage = computed(() => lightboxIndex.value === null
+    ? null
+    : `/storage/${props.galleryPhotos[lightboxIndex.value].image_path}`);
+function openLightbox(index) { lightboxIndex.value = index; }
+function showNextPhoto() {
+    if (lightboxIndex.value === null) return;
+    lightboxIndex.value = (lightboxIndex.value + 1) % props.galleryPhotos.length;
+}
+function showPreviousPhoto() {
+    if (lightboxIndex.value === null) return;
+    lightboxIndex.value = (lightboxIndex.value - 1 + props.galleryPhotos.length) % props.galleryPhotos.length;
+}
+function closeLightbox() { lightboxIndex.value = null; }
 
 // ── WhatsApp fallback ────────────────────────────────────────────
 const whatsappLink = 'https://wa.me/?text=Hola%2C%20no%20aparecemos%20en%20la%20lista%20de%20invitados%20de%20la%20boda.%20%C2%BFNos%20pueden%20ayudar%3F';
@@ -397,6 +439,79 @@ function onTableInput() {
     tableSearched.value = false;
     tableDebounceTimer = setTimeout(searchTables, 350);
 }
+
+/** Copia el enlace público de la mesa para compartirlo o guardarlo. */
+const copiedTableLinkId = ref(null);
+
+async function copyTableLink(guest) {
+    const url = guest.table_plan_url;
+
+    if (!url) return;
+
+    try {
+        await navigator.clipboard.writeText(url);
+    } catch {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    }
+
+    copiedTableLinkId.value = guest.id;
+    setTimeout(() => {
+        if (copiedTableLinkId.value === guest.id) copiedTableLinkId.value = null;
+    }, 2000);
+}
+
+// ── Plano del salón con el asiento del invitado ─────────────────
+const seatPlanOpen = ref(false);
+const seatPlanLoading = ref(false);
+const seatPlanError = ref('');
+const seatPlanData = ref(null);
+const seatPlanGuest = ref(null);
+
+async function openSeatPlan(guest) {
+    seatPlanGuest.value = guest;
+    seatPlanOpen.value = true;
+    seatPlanLoading.value = true;
+    seatPlanError.value = '';
+    seatPlanData.value = null;
+
+    try {
+        const { data } = await axios.get(`/mesas/${guest.id}/plano`);
+        seatPlanData.value = data;
+    } catch {
+        seatPlanError.value = 'No pudimos cargar el plano del salón. Intenta de nuevo.';
+    } finally {
+        seatPlanLoading.value = false;
+    }
+}
+
+function closeSeatPlan() {
+    seatPlanOpen.value = false;
+    seatPlanData.value = null;
+    seatPlanGuest.value = null;
+}
+
+const seatPlanPrimary = computed(
+    () => seatPlanData.value?.seats?.find((seat) => seat.is_primary) ?? null,
+);
+const seatPlanCompanions = computed(
+    () => (seatPlanData.value?.seats ?? []).filter((seat) => !seat.is_primary),
+);
+const seatPlanTableName = computed(() => {
+    const tableId = seatPlanPrimary.value?.table_id
+        ?? seatPlanData.value?.highlight_tables?.[0]
+        ?? null;
+
+    return seatPlanData.value?.tables?.find((table) => table.id === tableId)?.name
+        ?? seatPlanData.value?.guest?.table_group
+        ?? '';
+});
 
 onUnmounted(() => clearTimeout(tableDebounceTimer));
 </script>
@@ -1148,7 +1263,11 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                     <!-- Buscador -->
                     <div v-else>
                         <label class="block font-slab text-tinta mb-2 text-lg">Busca tu nombre</label>
-                        <p class="text-tinta/50 text-sm mb-4">Escribe tu nombre completo como aparece en la invitación</p>
+                        <p class="text-tinta/50 text-sm mb-4">
+                            Escribe tu nombre completo como aparece en la invitación. Al encontrarlo podrás ver
+                            tu lugar exacto en el plano del salón. Si tu mesa todavía no está asignada, te
+                            aparecerá como «Aún sin asignar».
+                        </p>
                         <div class="relative">
                             <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-tinta/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                             <input
@@ -1177,35 +1296,70 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                                         <p class="font-medium text-tinta">{{ guest.full_name }}</p>
                                         <p v-if="guest.group_name" class="text-tinta/40 text-xs mt-0.5">{{ guest.group_name }}</p>
                                     </div>
-                                    <span class="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-medium">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M6 6v12m12-12v12M4 18h16M9 10h6" />
-                                        </svg>
-                                        Mesa {{ guest.table_group }}
-                                    </span>
-                                </div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <template v-if="guest.has_table">
+                                            <span class="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-medium">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M6 6v12m12-12v12M4 18h16M9 10h6" />
+                                                </svg>
+                                                Mesa {{ guest.table_group }}<template v-if="guest.seat_number"> · Asiento {{ guest.seat_number }}</template>
+                                            </span>
 
-                                <!-- Compañeros de mesa: se muestran debajo de la mesa asignada -->
-                                <div v-if="guest.tablemates && guest.tablemates.length" class="mt-3 pt-3 border-t border-tinta/10">
-                                    <p class="text-tinta/50 text-xs uppercase tracking-wider font-medium mb-2">
-                                        También en tu mesa · {{ guest.tablemates.length }}
-                                    </p>
-                                    <div class="flex flex-wrap gap-1.5">
-                                        <span
-                                            v-for="(mate, i) in guest.tablemates" :key="i"
-                                            class="text-xs bg-white border border-tinta/10 text-tinta/70 px-2.5 py-1 rounded-full"
-                                        >{{ mate }}</span>
+                                            <button type="button" @click="openSeatPlan(guest)"
+                                                class="inline-flex items-center gap-1.5 bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z"/>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                </svg>
+                                                Ver mi lugar en el plano
+                                            </button>
+
+                                            <button v-if="guest.table_plan_url" type="button" @click="copyTableLink(guest)"
+                                                class="inline-flex items-center gap-1.5 rounded-full border border-tinta/20 bg-white px-3 py-2 text-xs font-medium text-tinta/60 transition-colors hover:bg-niebla"
+                                                :title="copiedTableLinkId === guest.id ? 'Enlace copiado' : 'Copiar enlace de tu mesa'">
+                                                <CheckIcon v-if="copiedTableLinkId === guest.id" class="w-4 h-4 text-green-600" />
+                                                <ClipboardDocumentIcon v-else class="w-4 h-4" />
+                                                {{ copiedTableLinkId === guest.id ? 'Enlace copiado' : 'Copiar enlace' }}
+                                            </button>
+                                        </template>
+
+                                        <span v-else class="inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 px-3 py-1.5 rounded-full text-sm font-medium">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                            Aún sin asignar
+                                        </span>
                                     </div>
                                 </div>
-                                <p v-else class="mt-3 pt-3 border-t border-tinta/10 text-tinta/40 text-xs italic">
-                                    Por ahora no hay más invitados asignados a esta mesa.
+
+                                <template v-if="guest.has_table">
+                                    <!-- Compañeros de mesa: se muestran debajo de la mesa asignada -->
+                                    <div v-if="guest.tablemates && guest.tablemates.length" class="mt-3 pt-3 border-t border-tinta/10">
+                                        <p class="text-tinta/50 text-xs uppercase tracking-wider font-medium mb-2">
+                                            También en tu mesa · {{ guest.tablemates.length }}
+                                        </p>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <span
+                                                v-for="(mate, i) in guest.tablemates" :key="i"
+                                                class="text-xs bg-white border border-tinta/10 text-tinta/70 px-2.5 py-1 rounded-full"
+                                            >{{ mate }}</span>
+                                        </div>
+                                    </div>
+                                    <p v-else class="mt-3 pt-3 border-t border-tinta/10 text-tinta/40 text-xs italic">
+                                        Por ahora no hay más invitados asignados a esta mesa.
+                                    </p>
+                                </template>
+
+                                <p v-else class="mt-3 pt-3 border-t border-tinta/10 text-tinta/50 text-xs">
+                                    Ya estás en la lista de invitados. En cuanto se publique el acomodo podrás consultar
+                                    aquí tu mesa y tu asiento.
                                 </p>
                             </div>
                         </div>
 
                         <!-- Sin resultados -->
                         <div v-if="tableSearched && !tableLoading && tableResults.length === 0 && tableQuery.trim().length >= 2" class="mt-6 text-center">
-                            <p class="text-tinta/60 mb-4">No encontramos tu nombre entre las mesas asignadas.</p>
+                            <p class="text-tinta/60 mb-4">No encontramos tu nombre en la lista de invitados.</p>
                             <a :href="whatsappLink" target="_blank" rel="noopener"
                                 class="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-5 py-3 rounded-xl text-sm font-medium transition-all">
                                 Contáctanos por WhatsApp
@@ -1301,21 +1455,32 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                             <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                         </div>
                         <h3 class="font-slab text-xl text-tinta mb-2">📸 Sube tus fotos</h3>
-                        <p class="text-tinta/50 text-sm mb-6">Las fotos serán revisadas antes de publicarse</p>
+                        <p class="text-tinta/50 text-sm mb-6">
+                            {{ galleryRequiresApproval
+                                ? 'Las fotos serán revisadas antes de publicarse'
+                                : 'Tus fotos se publicarán al instante en la galería' }}
+                        </p>
 
                         <!-- Drag & Drop + Input -->
                         <label
                             class="block border-2 border-dashed border-tinta/20 hover:border-primary/50 rounded-2xl p-8 md:p-10 cursor-pointer transition-all bg-niebla/50 hover:bg-niebla-dark/30"
                             @dragover.prevent
-                            @drop.prevent="(e) => { if (e.dataTransfer.files[0]) { galleryForm.image = e.dataTransfer.files[0]; galleryPreview = URL.createObjectURL(e.dataTransfer.files[0]); } }"
+                            @drop.prevent="setGalleryFiles(Array.from($event.dataTransfer.files))"
                         >
-                            <input type="file" accept="image/*" class="hidden" @change="onGalleryFile" />
-                            <div v-if="!galleryPreview">
+                            <input type="file" accept="image/*" multiple class="hidden" @change="onGalleryFile" />
+                            <div v-if="!galleryFiles.length">
                                 <svg class="w-10 h-10 text-tinta/30 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                                <span class="text-tinta/50 text-sm">Arrastra tu foto aquí o haz clic para seleccionar</span>
+                                <span class="text-tinta/50 text-sm">Arrastra tus fotos aquí o haz clic para seleccionar varias</span>
                             </div>
-                            <img v-else :src="galleryPreview" class="max-h-48 mx-auto rounded-xl shadow-md" />
+                            <div v-else class="flex flex-wrap justify-center gap-3">
+                                <img v-for="({ previewUrl, file }, index) in galleryFiles" :key="`${file.name}-${index}`"
+                                    :src="previewUrl" :alt="file.name" class="w-24 h-24 object-cover rounded-xl shadow-md" />
+                                <p class="w-full text-tinta/60 text-sm mt-2">{{ galleryFiles.length }} foto(s) seleccionada(s)</p>
+                            </div>
                         </label>
+                        <p v-if="galleryUploadError" class="text-red-600 text-sm mt-2">
+                            {{ galleryUploadError }}
+                        </p>
 
                         <!-- Uploader name -->
                         <div class="mt-4">
@@ -1326,39 +1491,48 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                         <!-- Upload button -->
                         <button
                             @click="submitGallery"
-                            :disabled="!galleryForm.image || galleryForm.processing"
+                            :disabled="!galleryFiles.length || galleryUploadError || galleryForm.processing"
                             class="mt-4 inline-flex items-center gap-2 bg-primary hover:bg-primary-dark disabled:bg-tinta/20 disabled:text-tinta/30 text-white font-slab font-bold px-8 py-3 rounded-full transition-all duration-300 shadow-lg shadow-primary/20 hover:shadow-xl disabled:shadow-none"
                         >
                             <span v-if="galleryForm.processing">
                                 <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                                 Subiendo...
                             </span>
-                            <span v-else>Subir Foto</span>
+                            <span v-else>Subir {{ galleryFiles.length || '' }} foto(s)</span>
                         </button>
 
                         <!-- Success -->
                         <div v-if="gallerySuccess" class="mt-4 text-secondary animate-fade-in bg-secondary/10 rounded-xl py-3 px-4 inline-block">
-                            ✅ ¡Foto subida con éxito! Se mostrará al ser aprobada.
+                            ✅ ¡{{ gallerySuccessCount }} foto(s) subida(s) con éxito!
+                            {{ galleryRequiresApproval ? 'Se mostrarán al ser aprobadas.' : 'Ya aparecen en la galería.' }}
                         </div>
                     </div>
                 </div>
 
                 <!-- Gallery grid -->
-                <div v-if="galleryPhotos && galleryPhotos.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
+                <div v-if="galleryPhotos && galleryPhotos.length > 0" class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                     <div
-                        v-for="photo in galleryPhotos" :key="photo.id"
-                        @click="openLightbox('/storage/' + photo.image_path)"
-                        class="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-niebla"
+                        v-for="(photo, index) in galleryPhotos" :key="photo.id"
+                        @click="openLightbox(index)"
+                        class="relative aspect-square w-full rounded-2xl overflow-hidden cursor-pointer group shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] bg-niebla"
                     >
-                        <img :src="'/storage/' + photo.image_path" alt="Foto de boda" class="w-full h-full object-contain" />
+                        <img :src="'/storage/' + photo.image_path" alt="Foto de boda" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                         <div class="absolute inset-0 bg-tinta/0 group-hover:bg-tinta/20 transition-all duration-300 flex items-end p-3">
                             <span v-if="photo.uploader_name" class="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300">Por: {{ photo.uploader_name }}</span>
                         </div>
                     </div>
                 </div>
 
+                <div v-if="galleryPhotoCount > 0" class="text-center mt-6">
+                    <Link :href="route('gallery.show')"
+                        class="inline-flex items-center gap-2 rounded-full bg-primary hover:bg-primary-dark px-7 py-3 text-white font-medium shadow-md transition-colors">
+                        Ver toda la galería ({{ galleryPhotoCount }})
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
+                </div>
+
                 <!-- Empty state before wedding -->
-                <div v-else class="text-center text-tinta/40 py-10">
+                <div v-if="!galleryPhotoCount" class="text-center text-tinta/40 py-10">
                     <svg class="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     <p class="font-slab">La galería se activará el día del evento</p>
                     <p class="text-sm mt-1">¡Vuelve para compartir tus momentos favoritos!</p>
@@ -1376,7 +1550,70 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                 <button @click="closeLightbox" class="absolute top-6 right-6 text-white/60 hover:text-white transition-colors">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
+                <button v-if="galleryPhotos.length > 1" @click.stop="showPreviousPhoto"
+                    aria-label="Ver foto anterior"
+                    class="absolute left-3 md:left-8 text-white/80 hover:text-white p-3 rounded-full bg-black/20 hover:bg-black/40 transition-colors">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </button>
                 <img :src="lightboxImage" alt="Foto ampliada" class="max-w-full max-h-[90vh] rounded-2xl shadow-2xl" @click.stop />
+                <button v-if="galleryPhotos.length > 1" @click.stop="showNextPhoto"
+                    aria-label="Ver siguiente foto"
+                    class="absolute right-3 md:right-8 text-white/80 hover:text-white p-3 rounded-full bg-black/20 hover:bg-black/40 transition-colors">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+            </div>
+        </Teleport>
+
+        <!-- ════════════════ PLANO DEL SALÓN ════════════════ -->
+        <Teleport to="body">
+            <div
+                v-if="seatPlanOpen"
+                class="fixed inset-0 z-[120] bg-tinta/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 animate-fade-in"
+                @click.self="closeSeatPlan"
+            >
+                <div class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl">
+                    <div class="flex items-start justify-between gap-4 border-b border-tinta/10 p-5 md:p-6">
+                        <div>
+                            <p class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Encuentra tu mesa</p>
+                            <h3 class="font-script text-3xl md:text-4xl text-tinta mt-1">Tu lugar en el salón</h3>
+                            <p class="text-tinta/60 text-sm mt-1">{{ seatPlanGuest?.full_name }}</p>
+                        </div>
+                        <button type="button" @click="closeSeatPlan"
+                            class="text-tinta/40 hover:text-tinta transition-colors" aria-label="Cerrar plano">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="p-4 md:p-6">
+                        <div v-if="seatPlanLoading" class="flex flex-col items-center justify-center gap-2 py-16 text-tinta/50">
+                            <svg class="animate-spin w-6 h-6" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            Cargando el plano…
+                        </div>
+
+                        <p v-else-if="seatPlanError" class="py-10 text-center text-tinta/60">{{ seatPlanError }}</p>
+
+                        <template v-else-if="seatPlanData">
+                            <div class="mb-3 flex flex-wrap items-center gap-3">
+                                <span class="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-medium">
+                                    Mesa {{ seatPlanTableName }}<template v-if="seatPlanPrimary"> · Asiento {{ seatPlanPrimary.seat_number }}</template>
+                                </span>
+                                <span v-if="seatPlanCompanions.length" class="text-tinta/60 text-xs">
+                                    También se resalta: {{ seatPlanCompanions.map((seat) => seat.guest_name).join(', ') }}
+                                </span>
+                            </div>
+
+                            <SeatPlanViewer
+                                :venue="seatPlanData.venue"
+                                :tables="seatPlanData.tables"
+                                :elements="seatPlanData.elements"
+                                :seats="seatPlanData.seats"
+                                :highlight-tables="seatPlanData.highlight_tables"
+                            />
+                        </template>
+                    </div>
+                </div>
             </div>
         </Teleport>
 

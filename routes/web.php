@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FaqController as AdminFaqController;
+use App\Http\Controllers\Admin\FloorPlanController as AdminFloorPlanController;
 use App\Http\Controllers\Admin\GalleryController as AdminGalleryController;
 use App\Http\Controllers\Admin\GuestController as AdminGuestController;
 use App\Http\Controllers\Admin\GuestGroupController;
@@ -27,6 +28,8 @@ Route::post('/rsvp/{guest}/confirmar', [RsvpController::class, 'confirm'])
     ->middleware('throttle:10,1'); // rate limiting: 10 intentos por minuto
 
 // Galería — subida pública de fotos
+Route::get('/galeria/completa', [GalleryController::class, 'showGallery'])->name('gallery.show');
+Route::get('/galeria/{photo}/descargar', [GalleryController::class, 'download'])->name('gallery.download');
 Route::post('/galeria', [GalleryController::class, 'store'])
     ->name('gallery.store')
     ->middleware('throttle:5,1'); // rate limiting: 5 subidas por minuto
@@ -35,6 +38,11 @@ Route::post('/galeria', [GalleryController::class, 'store'])
 Route::get('/mesas/buscar', [TableController::class, 'search'])
     ->name('tables.search')
     ->middleware('throttle:30,1'); // rate limiting: 30 búsquedas por minuto
+
+// Plano del salón con el asiento resaltado del invitado (y su pareja)
+Route::get('/mesas/{guest}/plano', [TableController::class, 'plan'])
+    ->name('tables.plan')
+    ->middleware('throttle:60,1');
 
 // ─── Invitación digital (pública, sin login) ──────────────────────
 //  · /i/{token}            → puerta de apertura con el nombre de los invitados
@@ -46,6 +54,11 @@ Route::get('/i/{invitation}', [InvitationController::class, 'show'])
 
 Route::get('/i/{invitation}/abrir', [InvitationController::class, 'open'])
     ->name('invitation.open')
+    ->middleware('throttle:60,1');
+
+// Plano del salón con la mesa y los asientos de la invitación (link de WhatsApp)
+Route::get('/i/{invitation}/mesa', [InvitationController::class, 'tablePlan'])
+    ->name('invitation.table')
     ->middleware('throttle:60,1');
 
 Route::get('/i/{invitation}/confirmar', [PageController::class, 'rsvp'])
@@ -107,8 +120,19 @@ Route::middleware([
         Route::put('/invitaciones/{invitation:id}/enviada', [AdminInvitationController::class, 'markSent'])->name('invitations.sent');
         Route::delete('/invitaciones/{invitation:id}', [AdminInvitationController::class, 'destroy'])->name('invitations.destroy');
 
-        // Mesas (gestión de mesas y asignación de invitados)
-        Route::get('/mesas', [AdminTableController::class, 'index'])->name('tables.index');
+        // Plano de salón: diseñador visual de mesas y asignación de invitados
+        Route::get('/plano', [AdminFloorPlanController::class, 'index'])->name('floorplan.index');
+        Route::post('/plano/guardar', [AdminFloorPlanController::class, 'savePlan'])->name('floorplan.save');
+        Route::post('/plano/mesas', [AdminFloorPlanController::class, 'storeTable'])->name('floorplan.tables.store');
+        Route::delete('/plano/mesas/{guestTable}', [AdminFloorPlanController::class, 'destroyTable'])->name('floorplan.tables.destroy');
+        Route::post('/plano/asignar', [AdminFloorPlanController::class, 'assign'])->name('floorplan.assign');
+        Route::post('/plano/liberar', [AdminFloorPlanController::class, 'unassign'])->name('floorplan.unassign');
+        Route::post('/plano/relaciones', [AdminFloorPlanController::class, 'storeRelations'])->name('floorplan.relations.store');
+        Route::delete('/plano/relaciones/{guestRelation}', [AdminFloorPlanController::class, 'destroyRelation'])->name('floorplan.relations.destroy');
+        Route::post('/plano/invitados', [AdminFloorPlanController::class, 'storeGuest'])->name('floorplan.guests.store');
+
+        // Mesas: la sección anterior se sustituyó por el plano de salón.
+        Route::redirect('/mesas', '/admin/plano')->name('tables.index');
         Route::post('/mesas', [AdminTableController::class, 'store'])->name('tables.store');
         Route::post('/mesas/asignar', [AdminTableController::class, 'assign'])->name('tables.assign');
         Route::put('/mesas/{guestTable}', [AdminTableController::class, 'update'])->name('tables.update');
@@ -123,6 +147,8 @@ Route::middleware([
         // Galería (moderación)
         Route::get('/galeria', [AdminGalleryController::class, 'index'])->name('gallery.index');
         Route::post('/galeria/upload', [AdminGalleryController::class, 'store'])->name('gallery.store');
+        Route::patch('/galeria/aprobar-todas', [AdminGalleryController::class, 'approveAll'])->name('gallery.approve-all');
+        Route::patch('/galeria/aprobacion-automatica', [AdminGalleryController::class, 'toggleAutoApprove'])->name('gallery.auto-approve');
         Route::get('/galeria/{photo}/descargar', [AdminGalleryController::class, 'download'])->name('gallery.download');
         Route::patch('/galeria/{photo}/aprobar', [AdminGalleryController::class, 'approve'])->name('gallery.approve');
         Route::patch('/galeria/{photo}/rechazar', [AdminGalleryController::class, 'reject'])->name('gallery.reject');

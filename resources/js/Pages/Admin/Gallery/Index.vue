@@ -15,6 +15,8 @@ import { PhotoIcon, CheckCircleIcon, XCircleIcon, TrashIcon, ArrowDownTrayIcon, 
 const props = defineProps({
     photos: Object,
     counts: Object,
+    // true cuando las fotos de los invitados se publican sin moderación
+    autoApprove: Boolean,
 });
 
 const page = usePage();
@@ -31,6 +33,30 @@ function approve(photo) { approveForm.patch(route('admin.gallery.approve', photo
 
 const rejectForm = useForm({});
 function reject(photo) { rejectForm.patch(route('admin.gallery.reject', photo.id), { preserveScroll: true }); }
+
+const isApprovingAll = ref(false);
+function approveAll() {
+    if (isApprovingAll.value) return;
+    isApprovingAll.value = true;
+    router.patch(route('admin.gallery.approve-all'), {}, {
+        preserveScroll: true,
+        onFinish: () => { isApprovingAll.value = false; },
+    });
+}
+
+const autoApproveEnabled = ref(props.autoApprove);
+const isTogglingAutoApprove = ref(false);
+function toggleAutoApprove() {
+    if (isTogglingAutoApprove.value) return;
+    const next = !autoApproveEnabled.value;
+    isTogglingAutoApprove.value = true;
+    router.patch(route('admin.gallery.auto-approve'), { auto_approve: next }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => { autoApproveEnabled.value = next; },
+        onFinish: () => { isTogglingAutoApprove.value = false; },
+    });
+}
 
 const deletePhoto = ref(null);
 const deleteForm = useForm({});
@@ -100,6 +126,26 @@ function doUpload() {
         <div class="py-6">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
+            <!-- Publicación de fotos sin aprobación -->
+            <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl bg-white border border-tinta/10 px-5 py-4 shadow-sm">
+                <div>
+                    <p class="font-medium text-tinta">Subir fotos sin aprobar</p>
+                    <p class="text-xs text-tinta/50 mt-0.5">
+                        {{ autoApproveEnabled
+                            ? 'Activado: las fotos de los invitados se publican al instante.'
+                            : 'Desactivado: las fotos se revisan antes de publicarse.' }}
+                    </p>
+                </div>
+                <button type="button" role="switch" :aria-checked="autoApproveEnabled"
+                    aria-label="Subir fotos sin aprobar" @click="toggleAutoApprove"
+                    :disabled="isTogglingAutoApprove"
+                    :class="autoApproveEnabled ? 'bg-secondary' : 'bg-tinta/20'"
+                    class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-50">
+                    <span :class="autoApproveEnabled ? 'translate-x-6' : 'translate-x-1'"
+                        class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform"></span>
+                </button>
+            </div>
+
             <!-- Tabs + Actions -->
             <div class="flex gap-2 mb-8 flex-wrap items-center justify-between">
                 <div class="flex gap-2 flex-wrap items-center">
@@ -124,7 +170,13 @@ function doUpload() {
                     Rechazadas ({{ counts?.rejected ?? 0 }})
                 </button>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
+                    <button v-if="(counts?.pending ?? 0) > 0" @click="approveAll" :disabled="isApprovingAll"
+                        class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-secondary hover:bg-secondary-dark text-white disabled:opacity-50"
+                        title="Aprobar todas las fotos pendientes">
+                        <CheckCircleIcon class="w-4 h-4" />
+                        {{ isApprovingAll ? 'Aprobando...' : `Aprobar todas (${counts.pending})` }}
+                    </button>
                     <button @click="showUploadModal = true"
                         class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-primary hover:bg-primary-dark text-white">
                         <ArrowUpTrayIcon class="w-4 h-4" />

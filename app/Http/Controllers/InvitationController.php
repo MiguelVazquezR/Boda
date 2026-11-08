@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Guest;
 use App\Models\Invitation;
 use App\Models\WeddingSetting;
+use App\Support\FloorPlan;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cookie;
 use Inertia\Inertia;
@@ -53,6 +54,39 @@ class InvitationController extends Controller
         return redirect()
             ->away(WeddingSetting::current()->invitationArtworkUrl())
             ->withCookie($this->remember($invitation));
+    }
+
+    /**
+     * Página pública con el plano del salón y los asientos de la invitación.
+     * Es el enlace que se comparte por WhatsApp para que encuentren su mesa.
+     */
+    public function tablePlan(Invitation $invitation): Response
+    {
+        $members = $invitation->members()->get([
+            'id', 'full_name', 'table_group', 'seat_number',
+        ]);
+
+        $withTable = $members
+            ->filter(fn (Guest $guest) => filled($guest->table_group))
+            ->values();
+
+        return Inertia::render('SeatPlan', [
+            'invitation' => [
+                'token' => $invitation->token,
+                'display_name' => $invitation->display_name,
+                'members' => $members->map(fn (Guest $guest) => [
+                    'id' => $guest->id,
+                    'full_name' => $guest->full_name,
+                    'table_group' => $guest->table_group,
+                    'seat_number' => $guest->seat_number,
+                ])->values(),
+                'rsvp_url' => route('invitation.rsvp', $invitation->token),
+            ],
+            'plan' => $withTable->isNotEmpty()
+                ? FloorPlan::forGuests($withTable)
+                : null,
+            'coupleNames' => WeddingSetting::coupleNames(),
+        ]);
     }
 
     /**

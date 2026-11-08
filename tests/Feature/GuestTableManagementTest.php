@@ -69,17 +69,23 @@ class GuestTableManagementTest extends TestCase
         $this->guest('Luis', '5');
         GuestTable::create(['name' => 'Mesa 9']); // mesa sin invitados
 
-        $this->get(route('admin.tables.index'))
+        $this->get(route('admin.floorplan.index'))
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Admin/Tables/Index')
+                ->component('Admin/FloorPlan/Index')
                 ->has('tables', 2)
-                ->where('tables.0.name', '5')
-                ->where('tables.0.total', 2)
-                ->where('tables.1.name', 'Mesa 9')
-                ->where('tables.1.total', 0)
-                ->where('stats.tables', 2)
-                ->where('stats.assigned', 2)
-                ->where('stats.unassigned', 0));
+                ->where('tables.0.name', 'Mesa 9')
+                ->where('tables.1.name', '5')
+                ->has('guests', 2)
+                ->where('guests.0.table_group', '5')
+                ->has('venue'));
+    }
+
+    public function test_la_antigua_seccion_de_mesas_redirige_al_plano_de_salon(): void
+    {
+        $this->actingAs($this->adminUser(), 'sanctum');
+
+        $this->get(route('admin.tables.index'))
+            ->assertRedirect(route('admin.floorplan.index'));
     }
 
     public function test_renombrar_una_mesa_mueve_a_sus_invitados(): void
