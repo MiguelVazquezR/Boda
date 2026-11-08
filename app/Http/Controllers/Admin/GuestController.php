@@ -529,6 +529,9 @@ class GuestController extends Controller
                 'public_url' => $invitation->publicUrl(),
                 'rsvp_url' => $invitation->rsvpUrl(),
                 'whatsapp_url' => $invitation->whatsappUrl(),
+                'table_plan_url' => $invitation->tablePlanUrl(),
+                'table_share_message' => $invitation->tableShareMessage(),
+                'table_whatsapp_url' => $invitation->tableWhatsappUrl(),
                 'pending_count' => $invitation->members->where('rsvp_status', 'pending')->count(),
                 'members' => $invitation->members->map(fn (Guest $guest) => [
                     'id' => $guest->id,

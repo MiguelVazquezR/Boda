@@ -31,6 +31,9 @@ class Invitation extends Model
     protected $appends = [
         'public_url',
         'share_message',
+        'table_plan_url',
+        'table_share_message',
+        'table_whatsapp_url',
     ];
 
     protected function casts(): array
@@ -119,6 +122,56 @@ class Invitation extends Model
     public function rsvpUrl(): string
     {
         return route('invitation.rsvp', $this->token);
+    }
+
+    /**
+     * Link público que muestra el plano del salón con sus asientos.
+     */
+    public function tablePlanUrl(): string
+    {
+        return route('invitation.table', $this->token);
+    }
+
+    /**
+     * Texto para compartir el link del plano y sus asientos (sin depender de
+     * que el invitado tenga registrado un número de WhatsApp).
+     */
+    public function tableShareMessage(): string
+    {
+        $names = $this->members->pluck('full_name')->filter()->values();
+        $greeting = $names->isNotEmpty() ? $names->implode(' y ') : $this->display_name;
+
+        return implode("\n\n", [
+            "¡Hola, {$greeting}!",
+            'Les comparto el enlace para que puedan ver fácilmente en qué mesa van a estar y cuál será su asiento:',
+            $this->tablePlanUrl(),
+            'También pueden consultarlo en nuestro sitio web, en la sección «Encuentra tu mesa».',
+            '¡Nos vemos en la celebración!',
+            WeddingSetting::coupleFirstNames(),
+        ]);
+    }
+
+    /**
+     * Link de WhatsApp con el texto del plano (para elegir el contacto a mano).
+     */
+    public function tableWhatsappUrl(): string
+    {
+        return 'https://wa.me/?text='.rawurlencode($this->tableShareMessage());
+    }
+
+    public function getTablePlanUrlAttribute(): string
+    {
+        return $this->tablePlanUrl();
+    }
+
+    public function getTableShareMessageAttribute(): string
+    {
+        return $this->tableShareMessage();
+    }
+
+    public function getTableWhatsappUrlAttribute(): string
+    {
+        return $this->tableWhatsappUrl();
     }
 
     /**

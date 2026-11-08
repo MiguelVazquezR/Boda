@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Squares2X2Icon, Square3Stack3DIcon, SparklesIcon, HeartIcon, CakeIcon, GiftIcon, MicrophoneIcon, MusicalNoteIcon, StarIcon, BanknotesIcon, ClipboardDocumentIcon, CheckIcon, CalendarDaysIcon } from '@heroicons/vue/24/outline';
 import DressCodeGrid from '@/Components/DressCode/DressCodeGrid.vue';
 import DressCodeCarousel from '@/Components/DressCode/DressCodeCarousel.vue';
+import SeatPlanViewer from '@/Components/FloorPlan/SeatPlanViewer.vue';
 import { parseEventDate, formatEventDate as formatDate, formatEventTime as formatTime } from '@/Composables/useEventDate';
 
 // ── Props ────────────────────────────────────────────────────────
@@ -438,6 +439,79 @@ function onTableInput() {
     tableSearched.value = false;
     tableDebounceTimer = setTimeout(searchTables, 350);
 }
+
+/** Copia el enlace público de la mesa para compartirlo o guardarlo. */
+const copiedTableLinkId = ref(null);
+
+async function copyTableLink(guest) {
+    const url = guest.table_plan_url;
+
+    if (!url) return;
+
+    try {
+        await navigator.clipboard.writeText(url);
+    } catch {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    }
+
+    copiedTableLinkId.value = guest.id;
+    setTimeout(() => {
+        if (copiedTableLinkId.value === guest.id) copiedTableLinkId.value = null;
+    }, 2000);
+}
+
+// ── Plano del salón con el asiento del invitado ─────────────────
+const seatPlanOpen = ref(false);
+const seatPlanLoading = ref(false);
+const seatPlanError = ref('');
+const seatPlanData = ref(null);
+const seatPlanGuest = ref(null);
+
+async function openSeatPlan(guest) {
+    seatPlanGuest.value = guest;
+    seatPlanOpen.value = true;
+    seatPlanLoading.value = true;
+    seatPlanError.value = '';
+    seatPlanData.value = null;
+
+    try {
+        const { data } = await axios.get(`/mesas/${guest.id}/plano`);
+        seatPlanData.value = data;
+    } catch {
+        seatPlanError.value = 'No pudimos cargar el plano del salón. Intenta de nuevo.';
+    } finally {
+        seatPlanLoading.value = false;
+    }
+}
+
+function closeSeatPlan() {
+    seatPlanOpen.value = false;
+    seatPlanData.value = null;
+    seatPlanGuest.value = null;
+}
+
+const seatPlanPrimary = computed(
+    () => seatPlanData.value?.seats?.find((seat) => seat.is_primary) ?? null,
+);
+const seatPlanCompanions = computed(
+    () => (seatPlanData.value?.seats ?? []).filter((seat) => !seat.is_primary),
+);
+const seatPlanTableName = computed(() => {
+    const tableId = seatPlanPrimary.value?.table_id
+        ?? seatPlanData.value?.highlight_tables?.[0]
+        ?? null;
+
+    return seatPlanData.value?.tables?.find((table) => table.id === tableId)?.name
+        ?? seatPlanData.value?.guest?.table_group
+        ?? '';
+});
 
 onUnmounted(() => clearTimeout(tableDebounceTimer));
 </script>
@@ -1189,7 +1263,11 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                     <!-- Buscador -->
                     <div v-else>
                         <label class="block font-slab text-tinta mb-2 text-lg">Busca tu nombre</label>
-                        <p class="text-tinta/50 text-sm mb-4">Escribe tu nombre completo como aparece en la invitación</p>
+                        <p class="text-tinta/50 text-sm mb-4">
+                            Escribe tu nombre completo como aparece en la invitación. Al encontrarlo podrás ver
+                            tu lugar exacto en el plano del salón. Si tu mesa todavía no está asignada, te
+                            aparecerá como «Aún sin asignar».
+                        </p>
                         <div class="relative">
                             <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-tinta/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                             <input
@@ -1218,35 +1296,70 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                                         <p class="font-medium text-tinta">{{ guest.full_name }}</p>
                                         <p v-if="guest.group_name" class="text-tinta/40 text-xs mt-0.5">{{ guest.group_name }}</p>
                                     </div>
-                                    <span class="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-medium">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M6 6v12m12-12v12M4 18h16M9 10h6" />
-                                        </svg>
-                                        Mesa {{ guest.table_group }}
-                                    </span>
-                                </div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <template v-if="guest.has_table">
+                                            <span class="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-medium">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M6 6v12m12-12v12M4 18h16M9 10h6" />
+                                                </svg>
+                                                Mesa {{ guest.table_group }}<template v-if="guest.seat_number"> · Asiento {{ guest.seat_number }}</template>
+                                            </span>
 
-                                <!-- Compañeros de mesa: se muestran debajo de la mesa asignada -->
-                                <div v-if="guest.tablemates && guest.tablemates.length" class="mt-3 pt-3 border-t border-tinta/10">
-                                    <p class="text-tinta/50 text-xs uppercase tracking-wider font-medium mb-2">
-                                        También en tu mesa · {{ guest.tablemates.length }}
-                                    </p>
-                                    <div class="flex flex-wrap gap-1.5">
-                                        <span
-                                            v-for="(mate, i) in guest.tablemates" :key="i"
-                                            class="text-xs bg-white border border-tinta/10 text-tinta/70 px-2.5 py-1 rounded-full"
-                                        >{{ mate }}</span>
+                                            <button type="button" @click="openSeatPlan(guest)"
+                                                class="inline-flex items-center gap-1.5 bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z"/>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                </svg>
+                                                Ver mi lugar en el plano
+                                            </button>
+
+                                            <button v-if="guest.table_plan_url" type="button" @click="copyTableLink(guest)"
+                                                class="inline-flex items-center gap-1.5 rounded-full border border-tinta/20 bg-white px-3 py-2 text-xs font-medium text-tinta/60 transition-colors hover:bg-niebla"
+                                                :title="copiedTableLinkId === guest.id ? 'Enlace copiado' : 'Copiar enlace de tu mesa'">
+                                                <CheckIcon v-if="copiedTableLinkId === guest.id" class="w-4 h-4 text-green-600" />
+                                                <ClipboardDocumentIcon v-else class="w-4 h-4" />
+                                                {{ copiedTableLinkId === guest.id ? 'Enlace copiado' : 'Copiar enlace' }}
+                                            </button>
+                                        </template>
+
+                                        <span v-else class="inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 px-3 py-1.5 rounded-full text-sm font-medium">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                            Aún sin asignar
+                                        </span>
                                     </div>
                                 </div>
-                                <p v-else class="mt-3 pt-3 border-t border-tinta/10 text-tinta/40 text-xs italic">
-                                    Por ahora no hay más invitados asignados a esta mesa.
+
+                                <template v-if="guest.has_table">
+                                    <!-- Compañeros de mesa: se muestran debajo de la mesa asignada -->
+                                    <div v-if="guest.tablemates && guest.tablemates.length" class="mt-3 pt-3 border-t border-tinta/10">
+                                        <p class="text-tinta/50 text-xs uppercase tracking-wider font-medium mb-2">
+                                            También en tu mesa · {{ guest.tablemates.length }}
+                                        </p>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <span
+                                                v-for="(mate, i) in guest.tablemates" :key="i"
+                                                class="text-xs bg-white border border-tinta/10 text-tinta/70 px-2.5 py-1 rounded-full"
+                                            >{{ mate }}</span>
+                                        </div>
+                                    </div>
+                                    <p v-else class="mt-3 pt-3 border-t border-tinta/10 text-tinta/40 text-xs italic">
+                                        Por ahora no hay más invitados asignados a esta mesa.
+                                    </p>
+                                </template>
+
+                                <p v-else class="mt-3 pt-3 border-t border-tinta/10 text-tinta/50 text-xs">
+                                    Ya estás en la lista de invitados. En cuanto se publique el acomodo podrás consultar
+                                    aquí tu mesa y tu asiento.
                                 </p>
                             </div>
                         </div>
 
                         <!-- Sin resultados -->
                         <div v-if="tableSearched && !tableLoading && tableResults.length === 0 && tableQuery.trim().length >= 2" class="mt-6 text-center">
-                            <p class="text-tinta/60 mb-4">No encontramos tu nombre entre las mesas asignadas.</p>
+                            <p class="text-tinta/60 mb-4">No encontramos tu nombre en la lista de invitados.</p>
                             <a :href="whatsappLink" target="_blank" rel="noopener"
                                 class="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-5 py-3 rounded-xl text-sm font-medium transition-all">
                                 Contáctanos por WhatsApp
@@ -1448,6 +1561,59 @@ onUnmounted(() => clearTimeout(tableDebounceTimer));
                     class="absolute right-3 md:right-8 text-white/80 hover:text-white p-3 rounded-full bg-black/20 hover:bg-black/40 transition-colors">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </button>
+            </div>
+        </Teleport>
+
+        <!-- ════════════════ PLANO DEL SALÓN ════════════════ -->
+        <Teleport to="body">
+            <div
+                v-if="seatPlanOpen"
+                class="fixed inset-0 z-[120] bg-tinta/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 animate-fade-in"
+                @click.self="closeSeatPlan"
+            >
+                <div class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl">
+                    <div class="flex items-start justify-between gap-4 border-b border-tinta/10 p-5 md:p-6">
+                        <div>
+                            <p class="text-secondary text-xs tracking-[0.3em] uppercase font-medium">Encuentra tu mesa</p>
+                            <h3 class="font-script text-3xl md:text-4xl text-tinta mt-1">Tu lugar en el salón</h3>
+                            <p class="text-tinta/60 text-sm mt-1">{{ seatPlanGuest?.full_name }}</p>
+                        </div>
+                        <button type="button" @click="closeSeatPlan"
+                            class="text-tinta/40 hover:text-tinta transition-colors" aria-label="Cerrar plano">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="p-4 md:p-6">
+                        <div v-if="seatPlanLoading" class="flex flex-col items-center justify-center gap-2 py-16 text-tinta/50">
+                            <svg class="animate-spin w-6 h-6" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            Cargando el plano…
+                        </div>
+
+                        <p v-else-if="seatPlanError" class="py-10 text-center text-tinta/60">{{ seatPlanError }}</p>
+
+                        <template v-else-if="seatPlanData">
+                            <div class="mb-3 flex flex-wrap items-center gap-3">
+                                <span class="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-medium">
+                                    Mesa {{ seatPlanTableName }}<template v-if="seatPlanPrimary"> · Asiento {{ seatPlanPrimary.seat_number }}</template>
+                                </span>
+                                <span v-if="seatPlanCompanions.length" class="text-tinta/60 text-xs">
+                                    También se resalta: {{ seatPlanCompanions.map((seat) => seat.guest_name).join(', ') }}
+                                </span>
+                            </div>
+
+                            <SeatPlanViewer
+                                :venue="seatPlanData.venue"
+                                :tables="seatPlanData.tables"
+                                :elements="seatPlanData.elements"
+                                :seats="seatPlanData.seats"
+                                :highlight-tables="seatPlanData.highlight_tables"
+                            />
+                        </template>
+                    </div>
+                </div>
             </div>
         </Teleport>
 

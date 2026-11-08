@@ -14,6 +14,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class GuestTable extends Model
 {
+    /** Formas válidas para el plano del salón. */
+    public const SHAPES = ['round', 'square', 'rect'];
+
+    private const PLAN_SIZES = [
+        'round' => [180, 180],
+        'square' => [160, 160],
+        'rect' => [240, 120],
+    ];
+
     protected $fillable = [
         'name',
         'number',
@@ -47,6 +56,31 @@ class GuestTable extends Model
     public function guests(): HasMany
     {
         return $this->hasMany(Guest::class, 'table_group', 'name');
+    }
+
+    /**
+     * Datos de la mesa para dibujarla en el plano (panel y vista pública).
+     * Si la mesa todavía no se ha colocado, se le da una posición inicial
+     * en cuadrícula según su índice.
+     */
+    public function planLayout(int $index = 0, int $columns = 4): array
+    {
+        $shape = in_array($this->shape, self::SHAPES, true) ? $this->shape : 'round';
+        [$defaultWidth, $defaultHeight] = self::PLAN_SIZES[$shape];
+
+        return [
+            'id' => $this->id,
+            'number' => $this->number ?? $index + 1,
+            'name' => $this->name,
+            'shape' => $shape,
+            'capacity' => $this->capacity ?: 8,
+            'x' => $this->x ?? 120 + ($index % $columns) * 340,
+            'y' => $this->y ?? 120 + intdiv($index, $columns) * 340,
+            'width' => $this->width ?: $defaultWidth,
+            'height' => $this->height ?: $defaultHeight,
+            'rotation' => $this->rotation ?? 0,
+            'seat_distribution' => $this->seat_distribution,
+        ];
     }
 
     /**

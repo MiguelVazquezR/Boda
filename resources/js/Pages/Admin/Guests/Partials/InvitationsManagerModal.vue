@@ -9,7 +9,7 @@ import ConfirmDeleteModal from '@/Components/Admin/ConfirmDeleteModal.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
-import { ClipboardDocumentIcon, CheckIcon, ChatBubbleLeftRightIcon, ArrowPathIcon, PencilIcon, TrashIcon, UserPlusIcon, LinkIcon } from '@heroicons/vue/24/outline';
+import { ClipboardDocumentIcon, CheckIcon, ChatBubbleLeftRightIcon, ArrowPathIcon, PencilIcon, TrashIcon, UserPlusIcon, LinkIcon, MapPinIcon } from '@heroicons/vue/24/outline';
 
 /**
  * Gestión de invitaciones digitales (parejas o personas solas).
@@ -54,6 +54,7 @@ const dialogPt = {
 
 const editingId = ref(null);
 const copiedId = ref(null);
+const copiedTableId = ref(null);
 
 const form = useForm({ display_name: '', members: [] });
 const actionForm = useForm({});
@@ -171,6 +172,29 @@ async function copyLink(invitation) {
         }, 2000);
     } catch {
         window.prompt('Copia el link de la invitación:', invitation.public_url);
+    }
+}
+
+/**
+ * Copia el texto con el link para ver la mesa y los asientos. Sirve para
+ * enviarlo por WhatsApp o por cualquier otro medio.
+ */
+async function copyTableMessage(invitation) {
+    const text = invitation.table_share_message;
+
+    if (!text) {
+        window.alert('El texto de mesa aún no está disponible en esta página. Recárgala (F5) e intenta de nuevo.');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(text);
+        copiedTableId.value = invitation.id;
+        setTimeout(() => {
+            if (copiedTableId.value === invitation.id) copiedTableId.value = null;
+        }, 2000);
+    } catch {
+        window.prompt('Copia el texto para compartir la mesa y el asiento:', text);
     }
 }
 
@@ -394,6 +418,30 @@ function sentTooltip(invitation) {
                                     title="Compartir por WhatsApp"
                                 >
                                     <ChatBubbleLeftRightIcon class="w-4 h-4" />
+                                </a>
+
+                                <!-- Copiar texto con el link de mesa y asiento -->
+                                <button
+                                    @click="copyTableMessage(invitation)"
+                                    class="p-2 transition-colors rounded-lg"
+                                    :class="copiedTableId === invitation.id
+                                        ? 'text-primary'
+                                        : 'text-tinta/30 hover:text-primary hover:bg-primary/5'"
+                                    :title="copiedTableId === invitation.id ? 'Texto de mesa copiado' : 'Copiar texto con link de mesa y asiento'"
+                                >
+                                    <CheckIcon v-if="copiedTableId === invitation.id" class="w-4 h-4" />
+                                    <MapPinIcon v-else class="w-4 h-4" />
+                                </button>
+
+                                <!-- Compartir el link de mesa y asiento por WhatsApp -->
+                                <a
+                                    :href="invitation.table_whatsapp_url"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="p-2 text-tinta/30 hover:text-green-500 transition-colors rounded-lg hover:bg-green-50"
+                                    title="Compartir mesa y asiento por WhatsApp"
+                                >
+                                    <ChatBubbleLeftRightIcon class="h-4 w-4" />
                                 </a>
 
                                 <button

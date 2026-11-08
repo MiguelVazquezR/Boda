@@ -39,6 +39,11 @@ Route::get('/mesas/buscar', [TableController::class, 'search'])
     ->name('tables.search')
     ->middleware('throttle:30,1'); // rate limiting: 30 búsquedas por minuto
 
+// Plano del salón con el asiento resaltado del invitado (y su pareja)
+Route::get('/mesas/{guest}/plano', [TableController::class, 'plan'])
+    ->name('tables.plan')
+    ->middleware('throttle:60,1');
+
 // ─── Invitación digital (pública, sin login) ──────────────────────
 //  · /i/{token}            → puerta de apertura con el nombre de los invitados
 //  · /i/{token}/abrir      → guarda la cookie del invitado y abre Canva (música + transiciones)
@@ -49,6 +54,11 @@ Route::get('/i/{invitation}', [InvitationController::class, 'show'])
 
 Route::get('/i/{invitation}/abrir', [InvitationController::class, 'open'])
     ->name('invitation.open')
+    ->middleware('throttle:60,1');
+
+// Plano del salón con la mesa y los asientos de la invitación (link de WhatsApp)
+Route::get('/i/{invitation}/mesa', [InvitationController::class, 'tablePlan'])
+    ->name('invitation.table')
     ->middleware('throttle:60,1');
 
 Route::get('/i/{invitation}/confirmar', [PageController::class, 'rsvp'])

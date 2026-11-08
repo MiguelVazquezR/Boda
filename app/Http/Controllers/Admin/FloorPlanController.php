@@ -24,21 +24,15 @@ use Inertia\Inertia;
  */
 class FloorPlanController extends Controller
 {
-    private const SHAPES = ['round', 'square', 'rect'];
-
-    private const DEFAULT_LAYOUT = [
-        'round' => [180, 180],
-        'square' => [160, 160],
-        'rect' => [240, 120],
-    ];
+    private const SHAPES = GuestTable::SHAPES;
 
     public function index()
     {
-        $guests = Guest::with('group:id,name')
+        $guests = Guest::with(['group:id,name', 'invitation:id,display_name'])
             ->orderBy('full_name')
             ->get([
                 'id', 'full_name', 'guest_group_id', 'rsvp_status',
-                'table_group', 'seat_number',
+                'table_group', 'seat_number', 'invitation_id',
             ]);
 
         $catalog = GuestTable::orderBy('id')->get();
@@ -52,7 +46,7 @@ class FloorPlanController extends Controller
         });
 
         $tables = $catalog->values()
-            ->map(fn (GuestTable $table, int $index) => $this->tablePayload($table, $index));
+            ->map(fn (GuestTable $table, int $index) => $table->planLayout($index));
 
         $settings = WeddingSetting::current();
 
@@ -65,6 +59,10 @@ class FloorPlanController extends Controller
                 'rsvp_status' => $guest->rsvp_status,
                 'table_group' => $guest->table_group,
                 'seat_number' => $guest->seat_number,
+                // La invitación agrupa a la pareja o acompañantes; se usa para
+                // sugerir automáticamente quién se sienta junto a quién.
+                'invitation_id' => $guest->invitation_id,
+                'invitation_name' => $guest->invitation?->display_name,
             ])->values(),
             'tables' => $tables,
             'groups' => GuestGroup::orderBy('name')->get(['id', 'name']),
@@ -209,7 +207,7 @@ class FloorPlanController extends Controller
 
         $table = GuestTable::create($data);
 
-        return response()->json(['table' => $this->tablePayload($table, 0)]);
+        return response()->json(['table' => $table->planLayout(0)]);
     }
 
     /**
@@ -377,30 +375,6 @@ class FloorPlanController extends Controller
             'height' => ['nullable', 'integer', 'min:40', 'max:2000'],
             'rotation' => ['nullable', 'integer', 'between:0,359'],
             'seat_distribution' => ['nullable', 'array'],
-        ];
-    }
-
-    /**
-     * Estructura que consume el diseñador para dibujar una mesa.
-     */
-    private function tablePayload(GuestTable $table, int $index): array
-    {
-        $shape = in_array($table->shape, self::SHAPES, true) ? $table->shape : 'round';
-        [$defaultWidth, $defaultHeight] = self::DEFAULT_LAYOUT[$shape];
-        $columns = 4;
-
-        return [
-            'id' => $table->id,
-            'number' => $table->number ?? $index + 1,
-            'name' => $table->name,
-            'shape' => $shape,
-            'capacity' => $table->capacity ?: 8,
-            'x' => $table->x ?? 120 + ($index % $columns) * 340,
-            'y' => $table->y ?? 120 + intdiv($index, $columns) * 340,
-            'width' => $table->width ?: $defaultWidth,
-            'height' => $table->height ?: $defaultHeight,
-            'rotation' => $table->rotation ?? 0,
-            'seat_distribution' => $table->seat_distribution,
         ];
     }
 

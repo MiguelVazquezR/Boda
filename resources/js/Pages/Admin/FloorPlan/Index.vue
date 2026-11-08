@@ -49,6 +49,8 @@ const groups = computed(() => props.groups ?? []);
 const selectedTableId = ref(null);
 const selectedElementId = ref(null);
 const selectedSeat = ref(null);
+const seatLinkGuestId = ref('');
+const seatLinkType = ref('couple');
 
 const selectedTable = computed(
     () => plan.tables.find((table) => table.id === selectedTableId.value) ?? null,
@@ -62,27 +64,104 @@ const selectedSeatGuest = computed(
         : null),
 );
 
-/** Vínculos (pareja, familia, acompañante…) del invitado sentado en el asiento. */
-const seatRelations = computed(
-    () => (selectedSeatGuest.value ? relationsOf(selectedSeatGuest.value.id) : []),
-);
+/** Invitados que comparten la invitación (pareja o acompañantes). */
+function invitationCompanions(guest) {
+    if (!guest?.invitation_id) return [];
+
+    return plan.guests.filter(
+        (item) => item.id !== guest.id && item.invitation_id === guest.invitation_id,
+    );
+}
+
+/**
+ * Compañeros de un invitado: vínculos manuales + integrantes de su misma
+ * invitación, sin repetir a nadie.
+ */
+function companionsOf(guest) {
+    if (!guest) return [];
+
+    const seen = new Set([guest.id]);
+    const list = [];
+
+    relationsOf(guest.id).forEach((relation) => {
+        if (!relation.guest || seen.has(relation.guest.id)) return;
+
+        seen.add(relation.guest.id);
+        list.push({ guest: relation.guest, label: relationLabel(relation.type) });
+    });
+
+    invitationCompanions(guest).forEach((companion) => {
+        if (seen.has(companion.id)) return;
+
+        seen.add(companion.id);
+        list.push({ guest: companion, label: 'Misma invitación' });
+    });
+
+    return list;
+}
+
+/** Compañeros del invitado sentado en el asiento seleccionado. */
+const seatCompanions = computed(() => companionsOf(selectedSeatGuest.value));
+
+/**
+ * Invitado del que se muestran los compañeros arriba de la lista:
+ * el del asiento seleccionado o, si no, el primero seleccionado en la lista.
+ */
+const companionsPanelGuest = computed(() => {
+    if (selectedSeatGuest.value) return selectedSeatGuest.value;
+
+    const selectedId = selectedGuestIds.value[0];
+
+    return selectedId ? plan.guests.find((guest) => guest.id === selectedId) ?? null : null;
+});
+
+const companionsPanelList = computed(() => companionsOf(companionsPanelGuest.value));
+
+/** Sienta a un compañero junto al invitado del asiento seleccionado. */
+async function seatNextTo(companion) {
+    const anchor = companionsPanelGuest.value;
+
+    if (!anchor?.tableId) {
+        notify('warn', 'Primero coloca a esta persona en una mesa.');
+        return;
+    }
+
+    const table = tableById(anchor.tableId);
+    const seat = anchor.seatId ? nextSeatNear(table, anchor.seatId) : firstFreeSeat(table);
+
+    if (!seat) {
+        notify('warn', `La mesa «${table.name}» está llena.`);
+        return;
+    }
+
+    await placeGuest(companion.id, table.id, seat);
+    notify('success', `${companion.full_name} quedó junto a ${anchor.full_name}.`);
+}
 
 function selectTable(id) {
     selectedTableId.value = id;
     selectedSeat.value = null;
     selectedElementId.value = null;
+    showInspector.value = true;
 }
 
 function selectSeat(tableId, number) {
+    if (selectedSeat.value?.tableId !== tableId || selectedSeat.value?.number !== number) {
+        seatLinkGuestId.value = '';
+    }
+
     selectedTableId.value = tableId;
     selectedSeat.value = { tableId, number };
     selectedElementId.value = null;
+    showInspector.value = true;
+    showGuests.value = false;
 }
 
 function selectElement(id) {
     selectedElementId.value = id;
     selectedTableId.value = null;
     selectedSeat.value = null;
+    showInspector.value = true;
 }
 
 // ── Ayudas de asientos ───────────────────────────────────────────
@@ -759,6 +838,49 @@ function relationLabel(type) {
     return relationTypes[type] ?? type;
 }
 
+/** Invitados disponibles para vincular desde el panel del asiento. */
+const seatLinkOptions = computed(() => {
+    const current = selectedSeatGuest.value;
+
+    return plan.guests
+        .filter((guest) => guest.id !== current?.id)
+        .slice()
+        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'es'));
+});
+
+async function linkSeatGuest() {
+    const guest = selectedSeatGuest.value;
+    const partnerId = Number(seatLinkGuestId.value);
+
+    if (!guest || !partnerId) return;
+
+    try {
+        const { data } = await axios.post(route('admin.floorplan.relations.store'), {
+            type: seatLinkType.value,
+            guest_ids: [guest.id, partnerId],
+        });
+
+        plan.relations = data.relations;
+        seatLinkGuestId.value = '';
+        notify('success', 'Vínculo creado. Ya puedes sentarlos juntos.');
+    } catch (error) {
+        notify('error', errorMessage(error));
+    }
+}
+
+/** Texto corto con la pareja/acompañante para mostrarlo en la lista. */
+function partnerSummary(guest) {
+    const relation = relationsOf(guest.id)[0];
+
+    if (relation) {
+        return `${relationLabel(relation.type)}: ${relation.guest.full_name}`;
+    }
+
+    const companion = invitationCompanions(guest)[0];
+
+    return companion ? `Invitación: ${companion.full_name}` : '';
+}
+
 async function linkSelectedGuests() {
     if (selectedGuestIds.value.length < 2) return;
 
@@ -813,27 +935,6 @@ function nextSeatNear(table, seatNumber) {
     }
 
     return null;
-}
-
-/**
- * Sienta a la pareja/acompañante del invitado seleccionado en el asiento
- * libre más cercano, para que queden juntos en la misma mesa.
- */
-async function seatPartner(relation) {
-    const table = selectedSeat.value ? tableById(selectedSeat.value.tableId) : null;
-    const guest = relation.guest;
-
-    if (!table || !guest || !selectedSeat.value) return;
-
-    const seat = nextSeatNear(table, selectedSeat.value.number);
-
-    if (!seat) {
-        notify('warn', `La mesa «${table.name}» está llena.`);
-        return;
-    }
-
-    await placeGuest(guest.id, table.id, seat);
-    notify('success', `${guest.full_name} quedó en «${table.name}», asiento ${seat}.`);
 }
 
 async function joinRelation(relation) {
@@ -984,6 +1085,37 @@ function setVenueMeters(side, value) {
                         </div>
                     </div>
 
+                    <!-- Compañeros de la misma invitación, listos para arrastrar -->
+                    <div v-if="companionsPanelGuest && companionsPanelList.length"
+                        class="border-b border-tinta/10 bg-primary/5 p-2">
+                        <p class="mb-1 truncate text-[11px] font-semibold text-tinta">
+                            Compañeros de {{ companionsPanelGuest.full_name }}
+                        </p>
+
+                        <div v-for="companion in companionsPanelList" :key="companion.guest.id"
+                            draggable="true"
+                            class="mb-1 flex cursor-grab items-center gap-2 rounded-lg bg-white px-2 py-1.5 shadow-sm active:cursor-grabbing"
+                            @dragstart="onGuestDragStart(companion.guest, $event)"
+                            @click="toggleGuest(companion.guest)">
+                            <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: groupColor(companion.guest.group_id) }"></span>
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-[11px] font-medium text-tinta">{{ companion.guest.full_name }}</p>
+                                <p class="truncate text-[10px] text-tinta/40">{{ companion.label }}</p>
+                            </div>
+
+                            <span v-if="companion.guest.tableId"
+                                class="shrink-0 rounded bg-secondary/15 px-1.5 py-0.5 text-[10px] font-medium text-secondary-dark">
+                                {{ tableNameFor(companion.guest) }}{{ companion.guest.seatId ? ` · ${companion.guest.seatId}` : '' }}
+                            </span>
+                            <button v-else-if="companionsPanelGuest.tableId" type="button"
+                                class="shrink-0 rounded-lg bg-secondary px-2 py-1 text-[10px] font-medium text-white hover:bg-secondary-dark"
+                                @click.stop="seatNextTo(companion.guest)">
+                                Sentar al lado
+                            </button>
+                            <span v-else class="shrink-0 text-[10px] text-tinta/40">Pendiente</span>
+                        </div>
+                    </div>
+
                     <!-- Acciones masivas -->
                     <div class="border-b border-tinta/10 p-2">
                         <div class="flex gap-1">
@@ -1042,6 +1174,9 @@ function setVenueMeters(side, value) {
                             <div class="min-w-0 flex-1">
                                 <p class="truncate text-xs font-medium text-tinta">{{ guest.full_name }}</p>
                                 <p class="truncate text-[10px] text-tinta/40">{{ guest.group_name ?? 'Sin grupo' }}</p>
+                                <p v-if="partnerSummary(guest)" class="truncate text-[10px] font-medium text-primary">
+                                    🔗 {{ partnerSummary(guest) }}
+                                </p>
                             </div>
                             <span v-if="guest.tableId" class="shrink-0 rounded-md bg-secondary/15 px-1.5 py-0.5 text-[10px] font-medium text-secondary-dark">
                                 {{ tableNameFor(guest) }}
@@ -1057,6 +1192,7 @@ function setVenueMeters(side, value) {
                     :tables="plan.tables"
                     :elements="plan.elements"
                     :guests="plan.guests"
+                    :relations="plan.relations"
                     :selected-table-id="selectedTableId"
                     :selected-element-id="selectedElementId"
                     :selected-seat="selectedSeat"
@@ -1196,36 +1332,62 @@ function setVenueMeters(side, value) {
                             <div class="rounded-xl border border-tinta/10 bg-niebla/60 p-2">
                                 <p class="text-[11px] font-semibold text-tinta/60">¿Quién va con esta persona?</p>
 
-                                <p v-if="!seatRelations.length" class="mt-1 text-[11px] text-tinta/40">
-                                    Para que queden juntos, selecciona a los dos en la lista y usa «Vincular» como pareja o acompañante.
+                                <p v-if="!seatCompanions.length" class="mt-1 text-[11px] text-tinta/40">
+                                    Esta persona no tiene acompañantes en su invitación ni vínculos.
                                 </p>
 
                                 <div
-                                    v-for="relation in seatRelations"
-                                    :key="relation.id"
+                                    v-for="companion in seatCompanions"
+                                    :key="companion.guest.id"
                                     class="mt-1.5 rounded-lg bg-white px-2 py-1.5"
                                 >
                                     <div class="flex items-center justify-between gap-2">
                                         <div class="min-w-0">
-                                            <p class="truncate text-[11px] text-tinta">{{ relation.guest.full_name }}</p>
-                                            <p class="text-[10px] text-tinta/40">{{ relationLabel(relation.type) }}</p>
+                                            <p class="truncate text-[11px] text-tinta">{{ companion.guest.full_name }}</p>
+                                            <p class="text-[10px] text-tinta/40">{{ companion.label }}</p>
                                         </div>
 
                                         <span
-                                            v-if="relation.guest.tableId === selectedSeat.tableId && relation.guest.seatId"
+                                            v-if="companion.guest.tableId === selectedSeat.tableId && companion.guest.seatId"
                                             class="shrink-0 rounded bg-secondary/15 px-1.5 py-0.5 text-[10px] font-medium text-secondary-dark"
                                         >
-                                            Asiento {{ relation.guest.seatId }}
+                                            Asiento {{ companion.guest.seatId }}
                                         </span>
 
                                         <button
                                             v-else
                                             type="button"
                                             class="shrink-0 rounded-lg bg-secondary px-2 py-1 text-[10px] font-medium text-white hover:bg-secondary-dark"
-                                            :title="`Agregar a ${relation.guest.full_name} en esta mesa`"
-                                            @click="seatPartner(relation)"
+                                            :title="`Agregar a ${companion.guest.full_name} en esta mesa`"
+                                            @click="seatNextTo(companion.guest)"
                                         >
-                                            {{ relation.guest.tableId ? 'Traer a esta mesa' : 'Sentar en el siguiente asiento' }}
+                                            {{ companion.guest.tableId ? 'Traer a esta mesa' : 'Sentar en el siguiente asiento' }}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Vincular desde el mismo panel del asiento -->
+                                <div class="mt-2 border-t border-tinta/10 pt-2">
+                                    <p class="text-[10px] text-tinta/40">Agregar pareja o acompañante</p>
+                                    <select v-model="seatLinkGuestId"
+                                        class="mt-1 w-full rounded-lg border border-tinta/20 px-1.5 py-1 text-[11px]">
+                                        <option value="">Elegir invitado…</option>
+                                        <option v-for="option in seatLinkOptions" :key="option.id" :value="option.id">
+                                            {{ option.full_name }}
+                                        </option>
+                                    </select>
+                                    <div class="mt-1 flex gap-1">
+                                        <select v-model="seatLinkType"
+                                            class="min-w-0 flex-1 rounded-lg border border-tinta/20 px-1.5 py-1 text-[11px]">
+                                            <option v-for="(label, type) in relationTypes" :key="type" :value="type">
+                                                {{ label }}
+                                            </option>
+                                        </select>
+                                        <button type="button"
+                                            class="rounded-lg bg-tinta px-2 py-1 text-[10px] font-medium text-white hover:bg-tinta-light disabled:opacity-40"
+                                            :disabled="!seatLinkGuestId"
+                                            @click="linkSeatGuest">
+                                            Vincular
                                         </button>
                                     </div>
                                 </div>
