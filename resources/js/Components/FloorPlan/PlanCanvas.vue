@@ -7,6 +7,7 @@ const props = defineProps({
     tables: { type: Array, default: () => [] },
     elements: { type: Array, default: () => [] },
     guests: { type: Array, default: () => [] },
+    relations: { type: Array, default: () => [] },
     selectedTableId: { type: Number, default: null },
     selectedElementId: { type: Number, default: null },
     selectedSeat: { type: Object, default: null },
@@ -100,6 +101,36 @@ function seatPositions(table) {
 
 function occupied(table) {
     return props.guests.filter((guest) => guest.tableId === table.id).length;
+}
+
+/** Nombres de la pareja/acompañante de cada invitado, para el tooltip del asiento. */
+const partnerNames = computed(() => {
+    const map = new Map();
+    const byId = new Map(props.guests.map((guest) => [guest.id, guest]));
+
+    props.relations.forEach((relation) => {
+        [[relation.guest_id, relation.related_guest_id], [relation.related_guest_id, relation.guest_id]]
+            .forEach(([guestId, partnerId]) => {
+                const partner = byId.get(partnerId);
+                if (!partner) return;
+
+                map.set(guestId, [...(map.get(guestId) ?? []), partner.full_name]);
+            });
+    });
+
+    return map;
+});
+
+function seatTitle(tableId, seatNumber) {
+    const guest = seatOccupants.value.get(`${tableId}:${seatNumber}`);
+
+    if (!guest) return `Asiento ${seatNumber}`;
+
+    const partners = partnerNames.value.get(guest.id) ?? [];
+
+    return partners.length
+        ? `${guest.full_name} · ${partners.join(', ')}`
+        : guest.full_name;
 }
 
 function shapeClass(table) {
@@ -345,7 +376,7 @@ function fitToScreen() {
                                 : '',
                         ]"
                         :style="{ left: `${position.x}px`, top: `${position.y}px` }"
-                        :title="seatOccupants.get(`${table.id}:${position.number}`)?.full_name ?? `Asiento ${position.number}`"
+                        :title="seatTitle(table.id, position.number)"
                         @click.stop="emit('select-seat', table.id, position.number)"
                         @dragover.prevent
                         @drop.prevent.stop="dropOnSeat(table, position.number, $event)"

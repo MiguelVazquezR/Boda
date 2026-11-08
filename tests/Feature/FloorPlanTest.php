@@ -6,9 +6,11 @@ use App\Models\FloorPlanElement;
 use App\Models\Guest;
 use App\Models\GuestRelation;
 use App\Models\GuestTable;
+use App\Models\Invitation;
 use App\Models\User;
 use App\Models\WeddingSetting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class FloorPlanTest extends TestCase
@@ -33,6 +35,22 @@ class FloorPlanTest extends TestCase
             'table_group' => $table,
             'seat_number' => $seat,
         ]);
+    }
+
+    public function test_el_plano_incluye_la_invitacion_de_cada_invitado(): void
+    {
+        $this->actingAs($this->adminUser(), 'sanctum');
+
+        $invitation = Invitation::create(['display_name' => 'Ana & Luis']);
+        $ana = $this->guest('Ana López');
+        $ana->update(['invitation_id' => $invitation->id]);
+
+        $this->get(route('admin.floorplan.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/FloorPlan/Index')
+                ->where('guests.0.full_name', 'Ana López')
+                ->where('guests.0.invitation_id', $invitation->id)
+                ->where('guests.0.invitation_name', 'Ana & Luis'));
     }
 
     public function test_el_admin_puede_crear_una_mesa_con_su_acomodo(): void

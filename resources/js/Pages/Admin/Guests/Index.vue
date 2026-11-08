@@ -16,7 +16,7 @@ import EmptyState from '@/Components/Admin/EmptyState.vue';
 import ConfirmDeleteModal from '@/Components/Admin/ConfirmDeleteModal.vue';
 import GuestDetailModal from './Partials/GuestDetailModal.vue';
 import InvitationsManagerModal from './Partials/InvitationsManagerModal.vue';
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon, CheckIcon, ClipboardDocumentIcon, ChatBubbleLeftRightIcon } from '@heroicons/vue/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon, CheckIcon, ClipboardDocumentIcon, ChatBubbleLeftRightIcon, MapPinIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
     guests: Array,
@@ -248,6 +248,7 @@ function closeInvitations() {
 // ── Copiar link y marcar como enviada desde la columna «Invitación» ──
 const copiedInvitationId = ref(null);
 const copiedInvitationTextId = ref(null);
+const copiedTableMessageId = ref(null);
 const invitationSentForm = useForm({ sent: false });
 
 /**
@@ -321,6 +322,29 @@ async function copyInvitationMessage(invitation) {
     copiedInvitationTextId.value = invitation.id;
     setTimeout(() => {
         if (copiedInvitationTextId.value === invitation.id) copiedInvitationTextId.value = null;
+    }, 2000);
+}
+
+/**
+ * Copia el texto con el link para ver la mesa y el asiento (para pegarlo en
+ * WhatsApp o en cualquier otro medio, aunque no tengan número registrado).
+ */
+async function copyTableMessage(invitation) {
+    const text = invitation.table_share_message;
+
+    if (!text) {
+        window.alert('El texto de la mesa aún no está disponible en esta página. Recárgala (F5) e intenta de nuevo.');
+        return;
+    }
+
+    if (!(await copyToClipboard(text))) {
+        window.prompt('Copia el texto para compartir la mesa y el asiento:', text);
+        return;
+    }
+
+    copiedTableMessageId.value = invitation.id;
+    setTimeout(() => {
+        if (copiedTableMessageId.value === invitation.id) copiedTableMessageId.value = null;
     }, 2000);
 }
 
@@ -545,6 +569,19 @@ function sentTooltip(invitation) {
                                         >
                                             <CheckIcon v-if="copiedInvitationTextId === data.invitation.id" class="w-4 h-4" />
                                             <ChatBubbleLeftRightIcon v-else class="w-4 h-4" />
+                                        </button>
+
+                                        <!-- Copiar texto con link de mesa y asiento -->
+                                        <button
+                                            @click="copyTableMessage(data.invitation)"
+                                            class="p-1.5 transition-colors rounded-lg"
+                                            :class="copiedTableMessageId === data.invitation.id
+                                                ? 'text-primary'
+                                                : 'text-tinta/30 hover:text-primary hover:bg-primary/5'"
+                                            :title="copiedTableMessageId === data.invitation.id ? 'Texto de mesa copiado' : 'Copiar texto con link de mesa y asiento'"
+                                        >
+                                            <CheckIcon v-if="copiedTableMessageId === data.invitation.id" class="w-4 h-4" />
+                                            <MapPinIcon v-else class="w-4 h-4" />
                                         </button>
 
                                         <!-- Marcar como enviada -->

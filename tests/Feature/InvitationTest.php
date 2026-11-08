@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\InvitationController;
 use App\Models\Guest;
+use App\Models\GuestTable;
 use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -226,7 +227,60 @@ class InvitationTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Admin/Guests/Index')
-                ->where('guests.0.invitation.share_message', $invitation->shareMessage()));
+                ->where('guests.0.invitation.share_message', $invitation->shareMessage())
+                ->where('guests.0.invitation.table_share_message', $invitation->tableShareMessage())
+                ->where('guests.0.invitation.table_plan_url', $invitation->tablePlanUrl()));
+    }
+
+    public function test_el_texto_de_mesa_incluye_el_link_del_plano(): void
+    {
+        $invitation = $this->invitation(
+            [$this->guest('Ana Pérez'), $this->guest('Luis García')],
+            'Ana & Luis',
+        );
+
+        $message = $invitation->tableShareMessage();
+
+        $this->assertStringContainsString('¡Hola, Ana Pérez y Luis García!', $message);
+        $this->assertStringContainsString('/i/'.$invitation->token.'/mesa', $message);
+        $this->assertStringContainsString($invitation->tablePlanUrl(), $message);
+        $this->assertStringContainsString('en qué mesa van a estar y cuál será su asiento', $message);
+    }
+
+    public function test_la_pagina_de_mesa_muestra_el_plano_con_los_asientos(): void
+    {
+        $ana = $this->guest('Ana Pérez');
+        $luis = $this->guest('Luis García');
+        $invitation = $this->invitation([$ana, $luis], 'Ana & Luis');
+
+        GuestTable::create(['name' => 'Mesa 5']);
+        $ana->update(['table_group' => 'Mesa 5', 'seat_number' => 3]);
+        $luis->update(['table_group' => 'Mesa 5', 'seat_number' => 4]);
+
+        $this->get(route('invitation.table', $invitation->token))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('SeatPlan')
+                ->where('invitation.display_name', 'Ana & Luis')
+                ->has('plan.tables', 1)
+                ->has('plan.seats', 2)
+                ->where('plan.seats.0.guest_name', 'Ana Pérez')
+                ->where('plan.seats.0.seat_number', 3)
+                ->where('plan.seats.0.is_primary', true)
+                ->where('plan.seats.1.guest_name', 'Luis García')
+                ->where('plan.seats.1.seat_number', 4)
+                ->where('plan.seats.1.is_primary', true));
+    }
+
+    public function test_la_pagina_de_mesa_avisa_cuando_todavia_no_hay_mesas(): void
+    {
+        $invitation = $this->invitation([$this->guest('Ana Pérez')], 'Ana Pérez');
+
+        $this->get(route('invitation.table', $invitation->token))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('SeatPlan')
+                ->where('plan', null));
     }
 
     public function test_no_permite_mas_de_dos_invitados_por_invitacion(): void
