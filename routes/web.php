@@ -98,6 +98,8 @@ Route::middleware([
 
         // Invitados
         Route::get('/invitados', [AdminGuestController::class, 'index'])->name('guests.index');
+        Route::get('/invitados/exportar', [AdminGuestController::class, 'export'])->name('guests.export');
+        Route::get('/invitados/imprimir', [AdminGuestController::class, 'printList'])->name('guests.print');
         Route::get('/invitados/nuevo', [AdminGuestController::class, 'create'])->name('guests.create');
         Route::get('/invitados/{guest}/editar', [AdminGuestController::class, 'edit'])->name('guests.edit');
         Route::post('/invitados', [AdminGuestController::class, 'store'])->name('guests.store');

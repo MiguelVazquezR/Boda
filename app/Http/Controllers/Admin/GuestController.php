@@ -9,6 +9,8 @@ use App\Models\Guest;
 use App\Models\GuestGroup;
 use App\Models\GuestTable;
 use App\Models\Invitation;
+use App\Models\WeddingSetting;
+use App\Support\XlsxWriter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -49,6 +51,84 @@ class GuestController extends Controller
                 'total' => Guest::count(),
             ],
         ]);
+    }
+
+    /**
+     * Exporta la lista de invitados a Excel (.xlsx) con el nombre y la mesa.
+     *
+     * Se exportan todos los invitados, ordenados por mesa y luego por nombre,
+     * para que la lista sirva como control de acomodo el día del evento.
+     */
+    public function export()
+    {
+        $rows = $this->orderedGuests()
+            ->map(fn (Guest $guest) => [
+                $guest->full_name,
+                $guest->table_group ?: 'Sin asignar',
+            ])
+            ->all();
+
+        $xlsx = XlsxWriter::create('Invitados', ['Invitado', 'Mesa'], $rows);
+
+        return response()->streamDownload(function () use ($xlsx) {
+            echo $xlsx;
+        }, 'invitados-'.now()->format('Y-m-d').'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    /**
+     * Vista de la lista de invitados agrupada por mesa, lista para imprimir
+     * o guardar como PDF desde el navegador.
+     */
+    public function printList()
+    {
+        $guests = $this->orderedGuests();
+
+        $tables = $guests
+            ->groupBy(fn (Guest $guest) => $guest->table_group ?: 'Sin asignar')
+            ->map(fn (Collection $tableGuests, string $name) => [
+                'name' => $name,
+                'assigned' => $name !== 'Sin asignar',
+                'guests' => $tableGuests->values(),
+            ])
+            ->values();
+
+        $unassigned = $tables->first(fn (array $table) => ! $table['assigned']);
+
+        $setting = WeddingSetting::current();
+
+        return view('admin.guests.print', [
+            'tables' => $tables,
+            'totalGuests' => $guests->count(),
+            'totalTables' => $tables->filter(fn (array $table) => $table['assigned'])->count(),
+            'unassignedCount' => $unassigned ? $unassigned['guests']->count() : 0,
+            'coupleNames' => WeddingSetting::coupleNames(),
+            'eventDate' => $setting->event_datetime?->locale('es'),
+            'venueName' => $setting->venue_name,
+        ]);
+    }
+
+    /**
+     * Invitados ordenados por mesa (orden natural) y luego por nombre, con
+     * quienes aún no tienen mesa al final. Lo comparten la exportación a
+     * Excel y la vista de impresión.
+     */
+    private function orderedGuests(): Collection
+    {
+        return Guest::orderBy('full_name')
+            ->get(['full_name', 'table_group'])
+            ->sort(function (Guest $a, Guest $b) {
+                $tableA = (string) $a->table_group;
+                $tableB = (string) $b->table_group;
+
+                if (($tableA === '') !== ($tableB === '')) {
+                    return $tableA === '' ? 1 : -1;
+                }
+
+                return strnatcasecmp($tableA, $tableB) ?: strcmp($a->full_name, $b->full_name);
+            })
+            ->values();
     }
 
     /**
