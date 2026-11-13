@@ -16,7 +16,7 @@ import EmptyState from '@/Components/Admin/EmptyState.vue';
 import ConfirmDeleteModal from '@/Components/Admin/ConfirmDeleteModal.vue';
 import GuestDetailModal from './Partials/GuestDetailModal.vue';
 import InvitationsManagerModal from './Partials/InvitationsManagerModal.vue';
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon, CheckIcon, ClipboardDocumentIcon, ChatBubbleLeftRightIcon, MapPinIcon } from '@heroicons/vue/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, PrinterIcon, DocumentTextIcon, MagnifyingGlassIcon, EyeIcon, LinkIcon, CheckIcon, ClipboardDocumentIcon, ChatBubbleLeftRightIcon, MapPinIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
     guests: Array,
@@ -415,6 +415,22 @@ function sentTooltip(invitation) {
                                 <UserGroupIcon class="w-4 h-4" />
                                 Crear invitación ({{ selectedGuestIds.length }})
                             </PrimaryButton>
+                            <a
+                                :href="route('admin.guests.export')"
+                                class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-secondary rounded-md font-semibold text-xs text-secondary-dark uppercase tracking-widest shadow-sm hover:bg-secondary/10 transition ease-in-out duration-150 whitespace-nowrap"
+                            >
+                                <ArrowDownTrayIcon class="w-4 h-4" />
+                                Exportar Excel
+                            </a>
+                            <a
+                                :href="route('admin.guests.print')"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-secondary rounded-md font-semibold text-xs text-secondary-dark uppercase tracking-widest shadow-sm hover:bg-secondary/10 transition ease-in-out duration-150 whitespace-nowrap"
+                            >
+                                <PrinterIcon class="w-4 h-4" />
+                                Ver / Imprimir
+                            </a>
                             <SecondaryButton @click="showImportModal = true" class="flex items-center gap-2 whitespace-nowrap">
                                 <ArrowUpTrayIcon class="w-4 h-4" />
                                 Importar CSV
